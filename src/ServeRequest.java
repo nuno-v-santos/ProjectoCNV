@@ -31,8 +31,9 @@ class ServeRequest implements Runnable {
 
 			// run requested mazerunner
 			Main m = new Main();
-			String[] args = { "3", "9", "78", "89", "50", "astar", "MazeRunner/Maze100.maze", "Maze100.html" };
-			//String[] args = request.getRequestBody();
+			//String[] args = { "3", "9", "78", "89", "50", "astar", "MazeRunner/Maze100.maze", "Maze100.html" };
+			//http://localhost:8000/test?3&9&78&89&50&astar&MazeRunner/Maze100.maze&Maze100.html
+			String[] args = request.getRequestURI().getQuery().split("&");
 			try {
 				m.main(args);
 			} catch (InvalidMazeRunningStrategyException | InvalidCoordinatesException | CantGenerateOutputFileException
