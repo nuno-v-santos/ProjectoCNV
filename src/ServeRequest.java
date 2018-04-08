@@ -6,6 +6,12 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
+import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.Main;
+import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.CantGenerateOutputFileException;
+import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.CantReadMazeInputFileException;
+import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.InvalidCoordinatesException;
+import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.InvalidMazeRunningStrategyException;
+
 class ServeRequest implements Runnable {
    private Thread t;
    private String name;
@@ -19,6 +25,18 @@ class ServeRequest implements Runnable {
    
    public void run() {
       try {
+    	  
+    	 //run requested mazerunner
+    	 Main m = new Main();
+    	 String[] args = {"3", "9", "78", "89", "50", "astar", "MazeRunner/Maze100.maze", "Maze100.html"};
+    	 try {
+			m.main(args);
+		} catch (InvalidMazeRunningStrategyException | InvalidCoordinatesException | CantGenerateOutputFileException
+				| CantReadMazeInputFileException e) {
+			e.printStackTrace();
+		}
+    	 
+    	 //send html response
          System.out.println(name + " going to sleep");
          Thread.sleep(5000);
          System.out.println(name + " awake");
