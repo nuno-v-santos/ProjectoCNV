@@ -26,3 +26,8 @@ hs_err_pid*
 .project
 .settings/
 bin/
+
+# intelliJ
+.idea/
+*.iml
+out/
