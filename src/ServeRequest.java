@@ -27,42 +27,38 @@ class ServeRequest implements Runnable {
 	}
 
 	public void run() {
-      try {
-    	  
-    	 //run requested mazerunner
-    	 Main m = new Main();
-    	 String[] args = {"3", "9", "78", "89", "50", "astar", "MazeRunner/Maze100.maze", "Maze100.html"};
-    	 try {
-			m.main(args);
-		} catch (InvalidMazeRunningStrategyException | InvalidCoordinatesException | CantGenerateOutputFileException
-				| CantReadMazeInputFileException e) {
+		try {
+
+			// run requested mazerunner
+			Main m = new Main();
+			String[] args = { "3", "9", "78", "89", "50", "astar", "MazeRunner/Maze100.maze", "Maze100.html" };
+			//String[] args = request.getRequestBody();
+			try {
+				m.main(args);
+			} catch (InvalidMazeRunningStrategyException | InvalidCoordinatesException | CantGenerateOutputFileException
+					| CantReadMazeInputFileException e) {
+				e.printStackTrace();
+			}
+
+			// send html response
+			String outputFile = args[7];
+			Path path = Paths.get(outputFile);
+			request.sendResponseHeaders(200, Files.size(path));
+			OutputStream os = request.getResponseBody();
+			os.write(Files.readAllBytes(path));
+			os.close();
+		} catch (IOException e) {
 			e.printStackTrace();
+			System.out.println("Thread " + name + " interrupted.");
 		}
-    	 
-    	 //send html response
-         System.out.println(name + " going to sleep");
-         String mazeRunner = "pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.Main";
-         String[] args = {"3", "9", "78", "89", "50", "astar", "Maze100.maze", "Maze100.html"};
-         String outputFile = args[7];
-         Path path = Paths.get("./MazeRunner/" + outputFile);
-         
-         request.sendResponseHeaders(200, Files.size(path));
-         OutputStream os = request.getResponseBody();
-         
-         os.write(Files.readAllBytes(path));
-         os.close();
-      } catch (IOException e) {
-         e.printStackTrace();
-         System.out.println("Thread " + name + " interrupted.");
-      }
-      System.out.println("Thread " + name + " exiting.");
-   }
+		System.out.println("Thread " + name + " exiting.");
+	}
 
 	public void start() {
 		System.out.println("Thread " + name + " starting.");
 		if (t == null) {
 			t = new Thread(this, name);
-         t.start();
-      }
-   }
+			t.start();
+		}
+	}
 }
