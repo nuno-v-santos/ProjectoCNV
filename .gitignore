@@ -31,3 +31,6 @@ bin/
 .idea/
 *.iml
 out/
+
+CNV-lab-AWS.pem
+CNV-lab-AWS.ppk

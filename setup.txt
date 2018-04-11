@@ -6,9 +6,16 @@ security group : CNV-ssh-http
 
 ssh -i CNV.pem -l ec2-user 52.73.2.166
 
+sudo yum install git-core
+
 CLASSPATH BIT
-windows: SET CLASSPATH=<path>BIT\BIT;<path>BIT\samples;.\
-linux: export CLASSPATH="$CLASSPATH:/home/ec2-user/BIT:/home/ec2-user/BIT/samples:./"
+windows:
+SET CLASSPATH=<path>BIT\BIT;<path>BIT\samples;.\
+
+linux:
+export CLASSPATH="/home/ec2-user/ProjectoCNV/src/MazeRunner/src:/home/ec2-user/ProjectoCNV/src/BIT:/home/ec2-user/ProjectoCNV/src/BIT/samples:./"
+
+
 
 export _JAVA_OPTIONS="-XX:-UseSplitVerifier "$_JAVA_OPTIONS
 
@@ -22,3 +29,7 @@ find . -name "*.java" -print | xargs javac
 alias goUp='cd /home/ec2-user/ProjectoCNV/src/'
 alias goDown='cd /home/ec2-user/ProjectoCNV/src/MazeRunner/src/pt/ulisboa/tecnico/meic/cnv/mazerunner/maze'
 alias compileAll='find . -name "*.java" -print | xargs javac'
+
+#In case port is in use
+sudo netstat -plten | grep java
+sudo kill -9 <pid>
