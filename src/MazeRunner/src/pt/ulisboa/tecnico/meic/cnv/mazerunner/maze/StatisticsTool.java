@@ -19,31 +19,32 @@
 import BIT.highBIT.*;
 import java.io.File;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.Vector;
 
 public class StatisticsTool 
 {
-	private static int dyn_method_count = 0;
-	private static int dyn_bb_count = 0;
-	private static int dyn_instr_count = 0;
+	private HashMap<Long,Integer> dyn_method_count = new HashMap<>();
+	private HashMap<Long,Integer> dyn_bb_count = new HashMap<>();
+	private HashMap<Long,Integer> dyn_instr_count = new HashMap<>();
 	
-	private static int newcount = 0;
-	private static int newarraycount = 0;
-	private static int anewarraycount = 0;
-	private static int multianewarraycount = 0;
+	private int newcount = 0;
+	private int newarraycount = 0;
+	private int anewarraycount = 0;
+	private int multianewarraycount = 0;
 
-	private static int loadcount = 0;
-	private static int storecount = 0;
-	private static int fieldloadcount = 0;
-	private static int fieldstorecount = 0;
+	private int loadcount = 0;
+	private int storecount = 0;
+	private int fieldloadcount = 0;
+	private int fieldstorecount = 0;
 
-	private static StatisticsBranch[] branch_info;
-	private static int branch_number;
-	private static int branch_pc;
-	private static String branch_class_name;
-	private static String branch_method_name;
+	private StatisticsBranch[] branch_info;
+	private int branch_number;
+	private int branch_pc;
+	private String branch_class_name;
+	private String branch_method_name;
 		
-	public static void printUsage() 
+	public void printUsage() 
 		{
 			System.out.println("Syntax: java StatisticsTool -stat_type in_path [out_path]");
 			System.out.println("        where stat_type can be:");
@@ -60,7 +61,7 @@ public class StatisticsTool
 			System.exit(-1);
 		}
 
-	public static void doStatic(File in_dir) 
+	public void doStatic(File in_dir) 
 		{
 			String filelist[] = in_dir.list();
 			int method_count = 0;
@@ -112,7 +113,7 @@ public class StatisticsTool
 			System.out.println("Average number of methods per class:            " + method_per_class);
 		}
 
-	public static void doDynamic(File in_dir, File out_dir) 
+	public void doDynamic(File in_dir, File out_dir) 
 		{
 			String filelist[] = in_dir.list();
 			
@@ -137,7 +138,7 @@ public class StatisticsTool
 			}
 		}
 	
-    public static synchronized void printDynamic(String foo) 
+    public synchronized void printDynamic(String foo) 
 		{
 			System.out.println("Dynamic information summary:");
 			System.out.println("Number of methods:      " + dyn_method_count);
@@ -158,18 +159,29 @@ public class StatisticsTool
 		}
     
 
-    public static synchronized void dynInstrCount(int incr) 
-		{
-			dyn_instr_count += incr;
-			dyn_bb_count++;
+    public synchronized void dynInstrCount(int incr) {
+    	long threadId = Thread.currentThread().getId();
+		if (dyn_instr_count.get(threadId) == null) {
+			dyn_instr_count.put(threadId, 0);
 		}
+		dyn_instr_count.put(threadId, dyn_instr_count.get(threadId) + incr);
+		
+		if (dyn_bb_count.get(threadId) == null) {
+			dyn_bb_count.put(threadId, 0);
+		}
+		dyn_bb_count.put(threadId, dyn_bb_count.get(threadId) + 1);
+	}
 
-    public static synchronized void dynMethodCount(int incr) 
+    public synchronized void dynMethodCount(int incr) 
 		{
-			dyn_method_count++;
+    		long threadId = Thread.currentThread().getId();
+    		if (dyn_method_count.get(threadId) == null) {
+    			dyn_method_count.put(threadId, 0);
+    		}
+    		dyn_method_count.put(threadId, dyn_method_count.get(threadId) + incr);
 		}
 	
-	public static void doAlloc(File in_dir, File out_dir) 
+	public void doAlloc(File in_dir, File out_dir) 
 		{
 			String filelist[] = in_dir.list();
 			
@@ -201,7 +213,7 @@ public class StatisticsTool
 			}
 		}
 
-	public static synchronized void printAlloc(String s) 
+	public synchronized void printAlloc(String s) 
 		{
 			System.out.println("Allocations summary:");
 			System.out.println("new:            " + newcount);
@@ -210,7 +222,7 @@ public class StatisticsTool
 			System.out.println("multianewarray: " + multianewarraycount);
 		}
 
-	public static synchronized void allocCount(int type)
+	public synchronized void allocCount(int type)
 		{
 			switch(type) {
 			case InstructionTable.NEW:
@@ -228,7 +240,7 @@ public class StatisticsTool
 			}
 		}
 	
-	public static void doLoadStore(File in_dir, File out_dir) 
+	public void doLoadStore(File in_dir, File out_dir) 
 		{
 			String filelist[] = in_dir.list();
 			
@@ -266,7 +278,7 @@ public class StatisticsTool
 			}	
 		}
 
-	public static synchronized void printLoadStore(String s) 
+	public synchronized void printLoadStore(String s) 
 		{
 			System.out.println("Load Store Summary:");
 			System.out.println("Field load:    " + fieldloadcount);
@@ -275,7 +287,7 @@ public class StatisticsTool
 			System.out.println("Regular store: " + storecount);
 		}
 
-	public static synchronized void LSFieldCount(int type) 
+	public synchronized void LSFieldCount(int type) 
 		{
 			if (type == 0)
 				fieldloadcount++;
@@ -283,7 +295,7 @@ public class StatisticsTool
 				fieldstorecount++;
 		}
 
-	public static synchronized void LSCount(int type) 
+	public synchronized void LSCount(int type) 
 		{
 			if (type == 0)
 				loadcount++;
@@ -291,7 +303,7 @@ public class StatisticsTool
 				storecount++;
 		}
 	
-	public static void doBranch(File in_dir, File out_dir) 
+	public void doBranch(File in_dir, File out_dir) 
 		{
 			String filelist[] = in_dir.list();
 			int k = 0;
@@ -349,29 +361,29 @@ public class StatisticsTool
 			}	
 		}
 
-	public static synchronized void setBranchClassName(String name)
+	public synchronized void setBranchClassName(String name)
 		{
 			branch_class_name = name;
 		}
 
-	public static synchronized void setBranchMethodName(String name) 
+	public synchronized void setBranchMethodName(String name) 
 		{
 			branch_method_name = name;
 		}
 	
-	public static synchronized void setBranchPC(int pc)
+	public synchronized void setBranchPC(int pc)
 		{
 			branch_pc = pc;
 		}
 	
-	public static synchronized void branchInit(int n) 
+	public synchronized void branchInit(int n) 
 		{
 			if (branch_info == null) {
 				branch_info = new StatisticsBranch[n];
 			}
 		}
 
-	public static synchronized void updateBranchNumber(int n)
+	public synchronized void updateBranchNumber(int n)
 		{
 			branch_number = n;
 			
@@ -380,7 +392,7 @@ public class StatisticsTool
 			}
 		}
 
-	public static synchronized void updateBranchOutcome(int br_outcome)
+	public synchronized void updateBranchOutcome(int br_outcome)
 		{
 			if (br_outcome == 0) {
 				branch_info[branch_number].incrNotTaken();
@@ -390,7 +402,7 @@ public class StatisticsTool
 			}
 		}
 
-	public static synchronized void printBranch(String foo)
+	public synchronized void printBranch(String foo)
 		{
 			System.out.println("Branch summary:");
 			System.out.println("CLASS NAME" + '\t' + "METHOD" + '\t' + "PC" + '\t' + "TAKEN" + '\t' + "NOT_TAKEN");
@@ -403,7 +415,7 @@ public class StatisticsTool
 		}
 	
 			
-	public static void main(String argv[]) 
+	public void main(String argv[]) 
 		{
 			if (argv.length < 2 || !argv[0].startsWith("-")) {
 				printUsage();
