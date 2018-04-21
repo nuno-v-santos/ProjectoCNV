@@ -46,7 +46,7 @@ public class StatisticsTool {
 	private static String branch_class_name;
 	private static String branch_method_name;
 
-	public void printUsage() {
+	public static void printUsage() {
 		System.out.println("Syntax: java StatisticsTool -stat_type in_path [out_path]");
 		System.out.println("        where stat_type can be:");
 		System.out.println("        static:     static properties");
@@ -62,7 +62,7 @@ public class StatisticsTool {
 		System.exit(-1);
 	}
 
-	public void doStatic(File in_dir) {
+	public static void doStatic(File in_dir) {
 		String filelist[] = in_dir.list();
 		int method_count = 0;
 		int bb_count = 0;
@@ -114,7 +114,7 @@ public class StatisticsTool {
 	}
 
 
-	public void doDynamic(File in_dir, File out_dir) {
+	public static void doDynamic(File in_dir, File out_dir) {
 		String filelist[] = in_dir.list();
 
 		for (int i = 0; i < filelist.length; i++) {
@@ -178,7 +178,7 @@ public class StatisticsTool {
 		dyn_method_count.put(threadId, dyn_method_count.get(threadId) + incr);
 	}
 
-	public void doAlloc(File in_dir, File out_dir) {
+	public static void doAlloc(File in_dir, File out_dir) {
 		String filelist[] = in_dir.list();
 
 		for (int i = 0; i < filelist.length; i++) {
@@ -233,7 +233,7 @@ public class StatisticsTool {
 		}
 	}
 
-	public void doLoadStore(File in_dir, File out_dir) {
+	public static void doLoadStore(File in_dir, File out_dir) {
 		String filelist[] = in_dir.list();
 
 		for (int i = 0; i < filelist.length; i++) {
@@ -291,7 +291,7 @@ public class StatisticsTool {
 			storecount++;
 	}
 
-	public void doBranch(File in_dir, File out_dir) {
+	public static void doBranch(File in_dir, File out_dir) {
 		String filelist[] = in_dir.list();
 		int k = 0;
 		int total = 0;
