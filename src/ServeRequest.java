@@ -1,9 +1,15 @@
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.net.InetSocketAddress;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
+import java.util.List;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -36,7 +42,22 @@ class ServeRequest implements Runnable {
 			String[] args = request.getRequestURI().getQuery().split("&");
 			args[6] = "MazeRunner/" + args[6];
 			try {
+				// Create a stream to hold the output
+				ByteArrayOutputStream baos = new ByteArrayOutputStream();
+				PrintStream ps = new PrintStream(baos);
+				// IMPORTANT: Save the old System.out!
+				PrintStream old = System.out;
+				// Tell Java to use your special stream
+				System.setOut(ps);
 				m.main(args);
+				// Put things back
+				System.out.flush();
+				System.setOut(old);
+
+				List<String> lines = Arrays.asList(Arrays.toString(args), baos.toString());
+				Path file = Paths.get("metrica.txt");
+				Files.write(file, lines, Charset.forName("UTF-8"));
+				Files.write(file, lines, Charset.forName("UTF-8"), StandardOpenOption.APPEND);
 			} catch (InvalidMazeRunningStrategyException | InvalidCoordinatesException | CantGenerateOutputFileException
 					| CantReadMazeInputFileException e) {
 				e.printStackTrace();
