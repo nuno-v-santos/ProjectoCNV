@@ -1,3 +1,5 @@
+package BIT.samples;
+
 //
 // StatisticsBranch.java
 //
