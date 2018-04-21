@@ -26,9 +26,9 @@ import BIT.highBIT.*;
 
 @SuppressWarnings("deprecation")
 public class StatisticsTool {
-	private HashMap<Long, Integer> dyn_method_count = new HashMap<>();
-	private HashMap<Long, Integer> dyn_bb_count = new HashMap<>();
-	private HashMap<Long, Integer> dyn_instr_count = new HashMap<>();
+	private static HashMap<Long, Integer> dyn_method_count = new HashMap<>();
+	private static HashMap<Long, Integer> dyn_bb_count = new HashMap<>();
+	private static HashMap<Long, Integer> dyn_instr_count = new HashMap<>();
 
 	private int newcount = 0;
 	private int newarraycount = 0;
@@ -138,7 +138,7 @@ public class StatisticsTool {
 		}
 	}
 
-	public synchronized void printDynamic(String foo) {
+	public static synchronized void printDynamic(String foo) {
 		System.out.println("Dynamic information summary:");
 		System.out.println("Number of methods:      " + dyn_method_count);
 		System.out.println("Number of basic blocks: " + dyn_bb_count);
@@ -157,7 +157,7 @@ public class StatisticsTool {
 		System.out.println("Average number of basic blocks per method:      " + bb_per_method);
 	}
 
-	public synchronized void dynInstrCount(int incr) {
+	public static synchronized void dynInstrCount(int incr) {
 		long threadId = Thread.currentThread().getId();
 		if (dyn_instr_count.get(threadId) == null) {
 			dyn_instr_count.put(threadId, 0);
@@ -170,7 +170,7 @@ public class StatisticsTool {
 		dyn_bb_count.put(threadId, dyn_bb_count.get(threadId) + 1);
 	}
 
-	public synchronized void dynMethodCount(int incr) {
+	public static synchronized void dynMethodCount(int incr) {
 		long threadId = Thread.currentThread().getId();
 		if (dyn_method_count.get(threadId) == null) {
 			dyn_method_count.put(threadId, 0);
