@@ -1,5 +1,3 @@
-package MazeRunner.src.pt.ulisboa.tecnico.meic.cnv.mazerunner.maze;
-
 //
 // StatisticsTool.java
 //
@@ -24,7 +22,7 @@ import java.util.HashMap;
 import java.util.Vector;
 
 import BIT.highBIT.*;
-import BIT.samples.StatisticsBranch;
+//import BIT.samples.StatisticsBranch;
 
 @SuppressWarnings("deprecation")
 public class StatisticsTool {
@@ -42,7 +40,7 @@ public class StatisticsTool {
 	private int fieldloadcount = 0;
 	private int fieldstorecount = 0;
 
-	private static StatisticsBranch[] branch_info;
+	//private static StatisticsBranch[] branch_info;
 	private static int branch_number;
 	private static int branch_pc;
 	private static String branch_class_name;
@@ -362,7 +360,7 @@ public class StatisticsTool {
 		branch_pc = pc;
 	}
 
-	public synchronized void branchInit(int n) {
+	/*public synchronized void branchInit(int n) {
 		if (branch_info == null) {
 			branch_info = new StatisticsBranch[n];
 		}
@@ -395,7 +393,7 @@ public class StatisticsTool {
 		}
 	}
 
-	public void main(String argv[]) {
+	*/public static void main(String argv[]) {
 		if (argv.length < 2 || !argv[0].startsWith("-")) {
 			printUsage();
 		}
