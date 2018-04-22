@@ -23,6 +23,8 @@ class ServeRequest implements Runnable {
 		this.name = name;
 		this.request = request;
 		this.threadArgs = threadArgs;
+		System.out.println("Thread " + name + " created.");
+
 	}
 
 	public void run() {
@@ -37,12 +39,15 @@ class ServeRequest implements Runnable {
 			String[] args = request.getRequestURI().getQuery().split("&");
 			args[6] = "MazeRunner/" + args[6];
 			threadArgs.put(threadId, Arrays.toString(args));
+			System.out.println("Thread " + name + " going to calculate.");
 			try {
 				m.main(args);
 			} catch (InvalidMazeRunningStrategyException | InvalidCoordinatesException | CantGenerateOutputFileException
 					| CantReadMazeInputFileException e) {
 				e.printStackTrace();
 			}
+
+			System.out.println("Thread " + name + " sending response.");
 
 			// send html response
 			String outputFile = args[7];
@@ -51,7 +56,7 @@ class ServeRequest implements Runnable {
 			OutputStream os = request.getResponseBody();
 			os.write(Files.readAllBytes(path));
 			os.close();
-			
+
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -59,9 +64,11 @@ class ServeRequest implements Runnable {
 	}
 
 	public void start() {
+		System.out.println("Thread " + name + " starting.");
 		if (t == null) {
 			t = new Thread(this, name);
 			t.start();
 		}
+		System.out.println("Thread " + name + " ending.");
 	}
 }

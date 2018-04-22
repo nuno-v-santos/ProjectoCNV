@@ -38,7 +38,8 @@ public class WebServer {
 
 	public void addMetric(Long id, Double metric) {
 		//Write metrics
-		List<String> argsAndMetric = Arrays.asList(threadArgs.get(id), metric.toString());
+		List<String> argsAndMetric = Arrays.asList(threadArgs.get(id) + ":" + metric.toString());
+		System.out.println("Thread " + id + " writing metrics: " + threadArgs.get(id) + ":" + metric.toString());
 
 		Path file = Paths.get("metrics.txt");
 		try {
@@ -55,5 +56,6 @@ public class WebServer {
 	}
 
 }
+
 
 
