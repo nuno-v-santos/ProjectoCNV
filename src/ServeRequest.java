@@ -38,6 +38,7 @@ class ServeRequest implements Runnable {
 			//http://52.73.2.166:8000/test?3&9&4&9&50&astar&Maze100.maze&Maze100.html
 			String[] args = request.getRequestURI().getQuery().split("&");
 			args[6] = "MazeRunner/" + args[6];
+			args[7] = args[7] + name;
 			threadArgs.put(threadId, Arrays.toString(args));
 			System.out.println("Thread " + name + " going to calculate.");
 			try {
@@ -56,6 +57,7 @@ class ServeRequest implements Runnable {
 			OutputStream os = request.getResponseBody();
 			os.write(Files.readAllBytes(path));
 			os.close();
+			Files.delete(path);
 
 		} catch (IOException e) {
 			e.printStackTrace();

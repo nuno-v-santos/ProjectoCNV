@@ -44,18 +44,21 @@ public class WebServer {
 		Path file = Paths.get("metrics.txt");
 		try {
 			Files.write(file, argsAndMetric, Charset.forName("UTF-8"), StandardOpenOption.APPEND);
-		} catch (IOException e) {
+		} catch (Exception e) {
 			try {
 				Files.createFile(file);
 				Files.write(file, argsAndMetric, Charset.forName("UTF-8"), StandardOpenOption.APPEND);
-			} catch (IOException e1) {
-				e1.printStackTrace();
+			} catch (Exception e1) {
+				try {
+					Files.write(file, argsAndMetric, Charset.forName("UTF-8"), StandardOpenOption.APPEND);
+				} catch (IOException e2) {
+					e2.printStackTrace();
+				}
 			}
 		}
 		
 	}
 
 }
-
 
 
