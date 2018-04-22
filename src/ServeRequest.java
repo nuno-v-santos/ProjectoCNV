@@ -1,41 +1,28 @@
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.PrintStream;
-import java.net.InetSocketAddress;
-import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 
 import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
-
 import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.Main;
 import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.CantGenerateOutputFileException;
 import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.CantReadMazeInputFileException;
 import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.InvalidCoordinatesException;
 import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.InvalidMazeRunningStrategyException;
 
-
-
 class ServeRequest implements Runnable {
 	private Thread t;
 	private String name;
 	private HttpExchange request;
 	private Map<Long, String> threadArgs;
-	private ByteArrayOutputStream newOut;
 
-	ServeRequest(String name, HttpExchange request, Map<Long, String> threadArgs, ByteArrayOutputStream newOut) {
+	ServeRequest(String name, HttpExchange request, Map<Long, String> threadArgs) {
 		this.name = name;
 		this.request = request;
 		this.threadArgs = threadArgs;
-		this.newOut = newOut;
 	}
 
 	public void run() {
@@ -64,14 +51,6 @@ class ServeRequest implements Runnable {
 			OutputStream os = request.getResponseBody();
 			os.write(Files.readAllBytes(path));
 			os.close();
-			
-			//Write metrics
-			List<String> idAndMetric = Arrays.asList(newOut.toString().split(" "));
-			Long id = Long.parseLong(idAndMetric.get(0));
-			List<String> argsAndMetric = Arrays.asList(id.toString(), threadArgs.get(id), idAndMetric.get(1));
-
-			Path file = Paths.get("metrics.txt");
-			Files.write(file, argsAndMetric, Charset.forName("UTF-8"), StandardOpenOption.APPEND);
 			
 		} catch (IOException e) {
 			e.printStackTrace();
