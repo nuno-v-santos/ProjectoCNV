@@ -3,33 +3,29 @@ image name : ami-fd802a80
 key name : CNV
 security group : CNV-ssh-http
 
-
 ssh -i CNV.pem -l ec2-user 52.73.2.166
-
-sudo yum install git-core
 
 CLASSPATH BIT
 windows:
 SET CLASSPATH=<path>BIT\BIT;<path>BIT\samples;.\
 
-linux:
-export CLASSPATH="/home/ec2-user/ProjectoCNV/src/MazeRunner/src:/home/ec2-user/ProjectoCNV/src/BIT:/home/ec2-user/ProjectoCNV/src/BIT/samples:./"
-
-
-
-export _JAVA_OPTIONS="-XX:-UseSplitVerifier "$_JAVA_OPTIONS
-
 URL
 http://<ip>:8000/test?3&9&4&9&50&astar&Maze100.maze&Maze100.html
-
-cd src/pt/ulisboa/tecnico/meic/cnv/mazerunner/maze
-
-find . -name "*.java" -print | xargs javac
-
-alias goUp='cd /home/ec2-user/ProjectoCNV/src/'
-alias goDown='cd /home/ec2-user/ProjectoCNV/src/MazeRunner/src/pt/ulisboa/tecnico/meic/cnv/mazerunner/maze'
-alias compileAll='find . -name "*.java" -print | xargs javac'
 
 #In case port is in use
 sudo netstat -plten | grep java
 sudo kill -9 <pid>
+
+
+#things to run
+sudo yum install git-core
+alias goUp='cd /home/ec2-user/ProjectoCNV/src/'
+alias goDown='cd /home/ec2-user/ProjectoCNV/src/MazeRunner/src/pt/ulisboa/tecnico/meic/cnv/mazerunner/maze'
+alias compileAll='find . -name "*.java" -print | xargs javac'
+export CLASSPATH="/home/ec2-user/ProjectoCNV/src/MazeRunner/src:/home/ec2-user/ProjectoCNV/src/BIT:/home/ec2-user/ProjectoCNV/src/BIT/samples:./"
+export _JAVA_OPTIONS="-XX:-UseSplitVerifier "$_JAVA_OPTIONS
+git clone https://github.com/nuno-santos96/ProjectoCNV
+cd ProjectoCNV/src
+compileAll
+java StatisticsTool MazeRunner/src/pt/ulisboa/tecnico/meic/cnv/mazerunner/maze
+java WebServer

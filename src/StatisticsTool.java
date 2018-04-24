@@ -19,12 +19,9 @@
 import java.io.File;
 import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.Vector;
-
 import BIT.highBIT.*;
 //import BIT.samples.StatisticsBranch;
 
-@SuppressWarnings("deprecation")
 public class StatisticsTool {
 	private static HashMap<Long, Double> dyn_method_count = new HashMap<>();
 	private static HashMap<Long, Double> dyn_bb_count = new HashMap<>();
@@ -55,7 +52,9 @@ public class StatisticsTool {
 	}
 
 	public static synchronized void printDynamic(String foo) {
-		System.out.println(Thread.currentThread().getId() + " " + dyn_instr_count.get(Thread.currentThread().getId()));
+		WebServer ws = new WebServer();
+		Long id = Thread.currentThread().getId();
+		ws.addMetric(id, dyn_instr_count.get(id));
 	}
 
 	public static synchronized void dynInstrCount(int incr) {
@@ -88,3 +87,4 @@ public class StatisticsTool {
 			return;
 	}
 }
+
