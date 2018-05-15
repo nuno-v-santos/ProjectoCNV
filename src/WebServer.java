@@ -22,8 +22,8 @@ public class WebServer {
 
     public static void main(String[] args) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
-        server.createContext("/test", new MyHandler());
-	server.createContext("/ping", new PingHandler());
+        server.createContext("/mzrun.html", new MazeRunnerHandler());
+        server.createContext("/ping", new PingHandler());
         server.setExecutor(null); // creates a default executor
         System.out.println("Running");
         server.start();
@@ -41,7 +41,7 @@ public class WebServer {
         }
     }
 
-    static class MyHandler implements HttpHandler {
+    static class MazeRunnerHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange t) throws IOException {
             ServeRequest r = new ServeRequest("" + request_counter, t, threadArgs);

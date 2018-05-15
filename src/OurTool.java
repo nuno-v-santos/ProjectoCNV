@@ -22,7 +22,7 @@ import java.util.HashMap;
 import BIT.highBIT.*;
 //import BIT.samples.StatisticsBranch;
 
-public class StatisticsTool {
+public class OurTool {
 	private static HashMap<Long, Double> dyn_method_count = new HashMap<>();
 	private static HashMap<Long, Double> dyn_bb_count = new HashMap<>();
 	private static HashMap<Long, Double> dyn_instr_count = new HashMap<>();
@@ -47,6 +47,9 @@ public class StatisticsTool {
 				}
 				ci.addAfter("StatisticsTool", "printDynamic", "null");
 				ci.write(out_filename);
+			} else if ((new File(filename)).isDirectory()){
+				File f = new File(filename);
+				doDynamic(f,f);
 			}
 		}
 	}
@@ -80,9 +83,8 @@ public class StatisticsTool {
 	
 	public static void main(String argv[]) {
 		File in_dir = new File(argv[0]);
-		File out_dir = in_dir;
 		if (in_dir.isDirectory())
-			doDynamic(in_dir, out_dir);
+			doDynamic(in_dir, in_dir);
 		else
 			return;
 	}

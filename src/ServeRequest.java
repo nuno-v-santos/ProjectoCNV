@@ -8,10 +8,7 @@ import java.util.Map;
 
 import com.sun.net.httpserver.HttpExchange;
 import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.Main;
-import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.CantGenerateOutputFileException;
-import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.CantReadMazeInputFileException;
-import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.InvalidCoordinatesException;
-import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.InvalidMazeRunningStrategyException;
+import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.*;
 
 class ServeRequest implements Runnable {
 	private Thread t;
@@ -36,9 +33,32 @@ class ServeRequest implements Runnable {
 			
 			//String[] args = { "3", "9", "78", "89", "50", "astar", "MazeRunner/Maze100.maze", "Maze100.html" };
 			//http://52.73.2.166:8000/test?3&9&4&9&50&astar&Maze100.maze&Maze100.html
-			String[] args = request.getRequestURI().getQuery().split("&");
-			args[6] = "MazeRunner/" + args[6];
-			args[7] = args[7] + name;
+			String[] receivedArgs = request.getRequestURI().getQuery().split("&");
+			String[] args = new String[8];
+			for (String arg : receivedArgs){
+				String[] attributes = arg.split("=");
+				if (attributes[0].equals("x0")){
+					args[0] = attributes[1];
+				} else if (attributes[0].equals("y0")){
+					args[1] = attributes[1];
+				} else if (attributes[0].equals("x1")){
+					args[2] = attributes[1];
+				} else if (attributes[0].equals("y1")){
+					args[3] = attributes[1];
+				} else if (attributes[0].equals("v")){
+					args[4] = attributes[1];
+				} else if (attributes[0].equals("s")){
+					args[5] = attributes[1];
+				} else if (attributes[0].equals("m")){
+					args[6] = "MazeRunner/" + attributes[1];
+				}
+			}
+
+			args[7] = name;
+
+			for (String e:args)
+				System.out.println(e);
+			
 			threadArgs.put(threadId, Arrays.toString(args));
 			System.out.println("Thread " + name + " going to calculate.");
 			try {
