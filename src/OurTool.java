@@ -1,21 +1,3 @@
-//
-// StatisticsTool.java
-//
-// This program measures and instruments to obtain different statistics
-// about Java programs.
-//
-// Copyright (c) 1998 by Han B. Lee (hanlee@cs.colorado.edu).
-// ALL RIGHTS RESERVED.
-//
-// Permission to use, copy, modify, and distribute this software and its
-// documentation for non-commercial purposes is hereby granted provided 
-// that this copyright notice appears in all copies.
-// 
-// This software is provided "as is".  The licensor makes no warrenties, either
-// expressed or implied, about its correctness or performance.  The licensor
-// shall not be liable for any damages suffered as a result of using
-// and modifying this software.
-
 import java.io.File;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -38,14 +20,14 @@ public class OurTool {
 				ClassInfo ci = new ClassInfo(in_filename);
 				for (Enumeration<?> e = ci.getRoutines().elements(); e.hasMoreElements();) {
 					Routine routine = (Routine) e.nextElement();
-					routine.addBefore("StatisticsTool", "dynMethodCount", new Integer(1));
+					routine.addBefore("OurTool", "dynMethodCount", new Integer(1));
 
 					for (Enumeration<?> b = routine.getBasicBlocks().elements(); b.hasMoreElements();) {
 						BasicBlock bb = (BasicBlock) b.nextElement();
-						bb.addBefore("StatisticsTool", "dynInstrCount", new Integer(bb.size()));
+						bb.addBefore("OurTool", "dynInstrCount", new Integer(bb.size()));
 					}
 				}
-				ci.addAfter("StatisticsTool", "printDynamic", "null");
+				ci.addAfter("OurTool", "printDynamic", "null");
 				ci.write(out_filename);
 			} else if ((new File(filename)).isDirectory()){
 				File f = new File(filename);

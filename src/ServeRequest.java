@@ -55,10 +55,7 @@ class ServeRequest implements Runnable {
 			}
 
 			args[7] = name;
-
-			for (String e:args)
-				System.out.println(e);
-			
+	
 			threadArgs.put(threadId, Arrays.toString(args));
 			System.out.println("Thread " + name + " going to calculate.");
 			try {
@@ -91,6 +88,5 @@ class ServeRequest implements Runnable {
 			t = new Thread(this, name);
 			t.start();
 		}
-		System.out.println("Thread " + name + " ending.");
 	}
 }
