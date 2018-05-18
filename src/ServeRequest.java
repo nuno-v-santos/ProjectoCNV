@@ -14,12 +14,12 @@ class ServeRequest implements Runnable {
 	private Thread t;
 	private String name;
 	private HttpExchange request;
-	private Map<Long, String> threadArgs;
+	private Map<Long, String[]> threadArgs;
 
-	ServeRequest(String name, HttpExchange request, Map<Long, String> threadArgs) {
+	ServeRequest(String name, HttpExchange request, Map<Long, String[]> threadArgs2) {
 		this.name = name;
 		this.request = request;
-		this.threadArgs = threadArgs;
+		this.threadArgs = threadArgs2;
 		System.out.println("Thread " + name + " created.");
 
 	}
@@ -56,7 +56,7 @@ class ServeRequest implements Runnable {
 
 			args[7] = name;
 	
-			threadArgs.put(threadId, Arrays.toString(args));
+			threadArgs.put(threadId, args);
 			System.out.println("Thread " + name + " going to calculate.");
 			try {
 				m.main(args);
