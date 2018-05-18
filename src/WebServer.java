@@ -3,7 +3,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
-
+import java.util.*;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -67,6 +67,8 @@ public class WebServer {
         //Write metrics
         String[] args = threadArgs.get(id);
         Map<String, AttributeValue> item = new HashMap<String, AttributeValue>();
+	System.out.println(Arrays.toString(args));
+        item.put("key", new AttributeValue(Integer.toString(args.hashCode())));
         item.put("m", new AttributeValue(args[0]));
         item.put("x0", new AttributeValue(args[1]));
         item.put("y0", new AttributeValue(args[2]));
@@ -101,8 +103,8 @@ public class WebServer {
         try {
             // Create a table with a primary hash key named 'name', which holds a string
             CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
-                .withKeySchema(new KeySchemaElement().withAttributeName("name").withKeyType(KeyType.HASH))
-                .withAttributeDefinitions(new AttributeDefinition().withAttributeName("name").withAttributeType(ScalarAttributeType.S))
+                .withKeySchema(new KeySchemaElement().withAttributeName("key").withKeyType(KeyType.HASH))
+                .withAttributeDefinitions(new AttributeDefinition().withAttributeName("key").withAttributeType(ScalarAttributeType.S))
                 .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(1L).withWriteCapacityUnits(1L));
 
             // Create table if it does not exist yet
