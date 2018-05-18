@@ -10,7 +10,7 @@ windows:
 SET CLASSPATH=<path>BIT\BIT;<path>BIT\samples;.\
 
 URL
-http://<ip>:8000/test?3&9&4&9&50&astar&Maze100.maze&Maze100.html
+http://<ip>:8000/mzrun.html?m=Maze50.maze&x0=1&y0=1&x1=6&y1=6&v=75&s=bfs
 
 #In case port is in use
 sudo netstat -plten | grep java
@@ -27,5 +27,5 @@ export _JAVA_OPTIONS="-XX:-UseSplitVerifier "$_JAVA_OPTIONS
 git clone https://github.com/nuno-santos96/ProjectoCNV
 cd ProjectoCNV/src
 compileAll
-java StatisticsTool MazeRunner/src/pt/ulisboa/tecnico/meic/cnv/mazerunner/maze
+java OurTool MazeRunner/src/pt/ulisboa/tecnico/meic/cnv/mazerunner/maze
 java WebServer
