@@ -14,7 +14,7 @@ import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.Main;
 import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.*;
 
 class ServeRequest implements Runnable {
-	private static final int CACHE_SIZE = 50;
+	private static final int CACHE_SIZE = 2;
 	public static ConcurrentSkipListSet<Integer> requestsCache= new ConcurrentSkipListSet<>();
 	private Thread t;
 	private int hash;
@@ -33,7 +33,7 @@ class ServeRequest implements Runnable {
 			// add() returns false if the element is in the set
 			if(! requestsCache.add(hash)) {
 				System.out.println("Thread " + hash + " is going to use the cache.");
-				Path path = Paths.get(Integer.toString(hash));
+				Path path = Paths.get("outputs/A" + hash);
 				request.sendResponseHeaders(200, Files.size(path));
 				OutputStream os = request.getResponseBody();
 				os.write(Files.readAllBytes(path));
@@ -68,7 +68,7 @@ class ServeRequest implements Runnable {
 					args[6] = "MazeRunner/" + attributes[1];
 				}
 			}
-			args[7] = Integer.toString(hash);
+			args[7] = "outputs/A" + hash;
 			
 			// execute maze runner
 			System.out.println("Thread " + hash + " going to calculate.");
@@ -92,7 +92,7 @@ class ServeRequest implements Runnable {
 			if(requestsCache.size() > CACHE_SIZE) {
 				int lastUsed = requestsCache.first();
 				requestsCache.remove(lastUsed);
-				Files.delete(Paths.get(Integer.toString(lastUsed)));
+				Files.delete(Paths.get("outputs/A" + lastUsed));
 			}
 			
 			// adds the arguments to dynamo

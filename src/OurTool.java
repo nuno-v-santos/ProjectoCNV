@@ -36,7 +36,7 @@ public class OurTool {
 		}
 	}
 
-	public static synchronized void registerMetric() {
+	public static synchronized void registerMetric(String foo) {
 		Long id = Thread.currentThread().getId();
 		WebServer.threadMetrics.put(id, dyn_instr_count.get(id));
 	}
@@ -61,13 +61,21 @@ public class OurTool {
 		}
 		dyn_method_count.put(threadId, dyn_method_count.get(threadId) + incr);
 	}
-	
+
 	public static void main(String argv[]) {
-		File in_dir = new File(argv[0]);
-		if (in_dir.isDirectory())
-			doDynamic(in_dir, in_dir);
-		else
+		if(argv.length == 0) {
+			System.out.println("Please provide the name of the directory");
 			return;
+		}
+
+		File in_dir = new File(argv[0]);
+
+		if (! in_dir.isDirectory()) {
+			System.out.println("Please provide a directory");
+			return;
+		}
+
+		doDynamic(in_dir, in_dir);
 	}
 }
 
