@@ -13,4 +13,5 @@ export _JAVA_OPTIONS="-XX:-UseSplitVerifier "$_JAVA_OPTIONS
 cd /home/ec2-user/ProjectoCNV/src
 compileAll
 java OurTool MazeRunner/src/pt/ulisboa/tecnico/meic/cnv/mazerunner/maze
+rm outputs/*
 java WebServer

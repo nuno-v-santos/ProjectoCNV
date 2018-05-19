@@ -39,3 +39,5 @@ rm aws-java-sdk.zip
 export CLASSPATH="/home/ec2-user/ProjectoCNV/src/MazeRunner/src:/home/ec2-user/ProjectoCNV/src/BIT:/home/ec2-user/ProjectoCNV/src/BIT/samples:/home/ec2-user/ProjectoCNV/aws-java-sdk-1.11.332/lib/aws-java-sdk-1.11.332.jar:/home/ec2-user/ProjectoCNV/aws-java-sdk-1.11.332/third-party/lib/*:./"
 ou
 export CLASSPATH=$CLASSPATH:/home/ec2-user/ProjectoCNV/aws-java-sdk-1.11.332/lib/aws-java-sdk-1.11.332.jar:/home/ec2-user/ProjectoCNV/aws-java-sdk-1.11.332/third-party/lib/*:.
+
+rm outputs/*
