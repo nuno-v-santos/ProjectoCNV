@@ -11,7 +11,8 @@ alias compileAll='find . -name "*.java" -print | xargs javac'
 export CLASSPATH="/home/ec2-user/ProjectoCNV/src/MazeRunner/src:/home/ec2-user/ProjectoCNV/src/BIT:/home/ec2-user/ProjectoCNV/src/BIT/samples:/home/ec2-user/ProjectoCNV/aws-java-sdk-1.11.332/lib/aws-java-sdk-1.11.332.jar:/home/ec2-user/ProjectoCNV/aws-java-sdk-1.11.332/third-party/lib/*:./"
 export _JAVA_OPTIONS="-XX:-UseSplitVerifier "$_JAVA_OPTIONS
 cd /home/ec2-user/ProjectoCNV/src
+sudo rm *.class
+sudo rm outputs/*
 compileAll
 java OurTool MazeRunner/src/pt/ulisboa/tecnico/meic/cnv/mazerunner/maze
-rm outputs/*
 java WebServer
