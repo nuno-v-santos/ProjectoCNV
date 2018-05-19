@@ -1,6 +1,15 @@
 import java.util.HashSet;
 import java.util.*;
 import java.util.Set;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.*;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
@@ -23,7 +32,7 @@ import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 
 public class LoadBalancer {
-    private static HashMap<Instance,HandleServer> instanceList = new HashMap<Instance,HandleServer>());
+    private static HashMap<String,HandleServer> instanceList = new HashMap<String,HandleServer>();
     private static AmazonEC2 ec2;
 
     private static void init() throws Exception {
@@ -55,7 +64,6 @@ public class LoadBalancer {
             }
 
             System.out.println("You have " + instances.size() + " Amazon EC2 instance(s) running.");
-    
             
         } catch (AmazonServiceException ase) {
                 System.out.println("Caught Exception: " + ase.getMessage());
@@ -68,18 +76,20 @@ public class LoadBalancer {
     }
 
    
-    public void newInstance(){
-         System.out.println("Starting a new instance.");
-            RunInstancesRequest runInstancesRequest = new RunInstancesRequest();
-            runInstancesRequest.withImageId("ami-0053ce7f")  
-                               .withInstanceType("t2.micro")
-                               .withMinCount(1)
-                               .withMaxCount(1)
-                               .withKeyName("CNV-lab-AWS")
-                               .withSecurityGroups("CNV-ssh+http");
-            RunInstancesResult runInstancesResult = ec2.runInstances(runInstancesRequest);
-            Instance i = runInstancesResult.getReservations().getInstances()[0];
-            instanceList.put(i,new HandleServer(i).start());
+    public static void newInstance(){
+        System.out.println("Starting a new instance.");
+        RunInstancesRequest runInstancesRequest = new RunInstancesRequest();
+        runInstancesRequest.withImageId("ami-7431ad0b")  
+                           .withInstanceType("t2.micro")
+                           .withMinCount(1)
+                           .withMaxCount(1)
+                           .withKeyName("CNV")
+                           .withSecurityGroups("CNV-ssh-http");
+        RunInstancesResult runInstancesResult = ec2.runInstances(runInstancesRequest);
+        String newInstanceId = runInstancesResult.getReservation().getInstances().get(0).getInstanceId();
+        HandleServer hs = new HandleServer(newInstanceId, ec2);
+        hs.start();
+        instanceList.put(newInstanceId,hs);
     }
 
     public void closeInstance(Instance i){
@@ -116,8 +126,11 @@ public class LoadBalancer {
             //check dynamo for metrics
             //check running instances for their load
             //send to correct instance based on dynamo metric and instance load/creat new instance
-            instanceList.firstEntry().getKey().sendRequest(request);
+            for(String i : instanceList.keySet()) {
+                HandleServer hs = instanceList.get(i);
+                hs.sendRequest(request);
+                break;
+            }
         }
     }
 }
-
