@@ -3,10 +3,6 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -73,10 +69,14 @@ class ServeRequest implements Runnable {
 			// execute maze runner
 			System.out.println("Thread " + hash + " going to calculate.");
 			try {
-				new Main().main(args);
-			} catch (InvalidMazeRunningStrategyException | InvalidCoordinatesException | CantGenerateOutputFileException
-					| CantReadMazeInputFileException e) {
-				e.printStackTrace();
+				Main.main(args);
+			} catch (InvalidMazeRunningStrategyException | InvalidCoordinatesException | CantGenerateOutputFileException | CantReadMazeInputFileException e) {
+	            String response = "Invalid query: " + e.getMessage();
+	            request.sendResponseHeaders(200, response.length());
+	            OutputStream os = request.getResponseBody();
+	            os.write(response.getBytes());
+	            os.close();
+	            return;
 			}
 
 			System.out.println("Thread " + hash + " sending response.");

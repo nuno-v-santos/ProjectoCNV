@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -38,7 +39,8 @@ public class WebServer {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
         server.createContext("/mzrun.html", new MazeRunnerHandler());
         server.createContext("/ping", new PingHandler());
-        server.setExecutor(null); // creates a default executor
+        int poolSize = Runtime.getRuntime().availableProcessors() + 1;
+        server.setExecutor(Executors.newFixedThreadPool(poolSize));
         System.out.println("Running");
         server.start();
     }
