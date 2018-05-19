@@ -27,7 +27,7 @@ public class OurTool {
 						bb.addBefore("OurTool", "dynInstrCount", new Integer(bb.size()));
 					}
 				}
-				ci.addAfter("OurTool", "printDynamic", "null");
+				ci.addAfter("OurTool", "registerMetric", "null");
 				ci.write(out_filename);
 			} else if ((new File(filename)).isDirectory()){
 				File f = new File(filename);
@@ -36,10 +36,9 @@ public class OurTool {
 		}
 	}
 
-	public static synchronized void printDynamic(String foo) {
-		WebServer ws = new WebServer();
+	public static synchronized void registerMetric() {
 		Long id = Thread.currentThread().getId();
-		ws.addMetric(id, dyn_instr_count.get(id));
+		WebServer.threadMetrics.put(id, dyn_instr_count.get(id));
 	}
 
 	public static synchronized void dynInstrCount(int incr) {

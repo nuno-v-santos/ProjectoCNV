@@ -1,9 +1,11 @@
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -27,13 +29,12 @@ import com.amazonaws.services.dynamodbv2.util.TableUtils;
 
 public class WebServer {
 
-    private static int request_counter = 0;
-    private static Map<Long, String[]> threadArgs = new HashMap<>();
+    static ConcurrentHashMap<Long, Double> threadMetrics = new ConcurrentHashMap<>();
     private static AmazonDynamoDB dynamoDB;
-    private static String tableName = "metrics";
+    private static String tableName = "Metrics";
 
     public static void main(String[] args) throws Exception {
-        init(); //Initialize db
+        initializeDataBase();
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
         server.createContext("/mzrun.html", new MazeRunnerHandler());
         server.createContext("/ping", new PingHandler());
@@ -45,8 +46,7 @@ public class WebServer {
     static class PingHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange t) throws IOException {
-            String response = "This was the query:" + t.getRequestURI().getQuery() 
-                               + "##";
+            String response = "This was the query:" + t.getRequestURI().getQuery()   + "##";
             t.sendResponseHeaders(200, response.length());
             OutputStream os = t.getResponseBody();
             os.write(response.getBytes());
@@ -57,17 +57,16 @@ public class WebServer {
     static class MazeRunnerHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange t) throws IOException {
-            ServeRequest r = new ServeRequest("" + request_counter, t, threadArgs);
+            ServeRequest r = new ServeRequest(t.getRequestURI().getQuery().hashCode(), t);
             r.start();
-            request_counter++;
         }
     }
 
-    public void addMetric(Long id, Double metric) {
+    public static void writeToDynamo(Long threadId, String[] args) {
         //Write metrics
-        String[] args = threadArgs.get(id);
+        Double metric = threadMetrics.get(threadId);
         Map<String, AttributeValue> item = new HashMap<String, AttributeValue>();
-	System.out.println(Arrays.toString(args));
+        System.out.println(Arrays.toString(args));
         item.put("key", new AttributeValue(Integer.toString(args.hashCode())));
         item.put("m", new AttributeValue(args[0]));
         item.put("x0", new AttributeValue(args[1]));
@@ -80,10 +79,10 @@ public class WebServer {
         PutItemRequest putItemRequest = new PutItemRequest(tableName, item);
         PutItemResult putItemResult = dynamoDB.putItem(putItemRequest);
         System.out.println("Result: " + putItemResult);
-        System.out.println("Thread " + id + " writing metrics: " + args + ":" + metric.toString());
+        System.out.println("Thread writing metrics: " + args + ":" + metric.toString());
     }
 
-    private static void init() throws Exception {
+    private static void initializeDataBase() throws Exception {
 
         ProfileCredentialsProvider credentialsProvider = new ProfileCredentialsProvider();
         try {
