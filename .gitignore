@@ -34,3 +34,6 @@ out/
 
 CNV-lab-AWS.pem
 CNV-lab-AWS.ppk
+
+aws-java-sdk-1.11.332/
+aws-java-sdk-1.11.333/

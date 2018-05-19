@@ -55,13 +55,15 @@ class HandleServer implements Runnable {
 	private AmazonEC2 ec2;
 	private ArrayList<String> handling;
 	private ArrayList<String> handled;
-	private boolean status = 0;
-	private Thread ping = new Thread(){
+	private int status = 0;
+	public Thread ping = new Thread(){
 		public void run(){
-			private boolean isAlive = true;
+			boolean isAlive = true;
 			while(isAlive){
 				try{
-					if(instanceIp.equals("")){
+
+					//if the ip address is not defined yet
+					if(instanceIp == null || instanceIp.equals("")){
 			   			DescribeInstancesResult describeInstancesRequest = ec2.describeInstances();
 	            		List<Reservation> reservations = describeInstancesRequest.getReservations();
 	            		Set<Instance> instances = new HashSet<Instance>();
@@ -71,30 +73,39 @@ class HandleServer implements Runnable {
 	                	}	            	
 
 		            	for (Instance i : instances){
-		            		if (i.getInstanceId().equals(this.instanceId)){
-		            			this.instanceIp = i.getPublicIpAddress();
+		            		if (i.getInstanceId().equals(instanceId)){
+		            			instanceIp = i.getPublicIpAddress();
 		            			break;
 		            		}
 		            	}
+		            	System.out.println("Failed ping. IP not defined yet.");
+		            } else {
+		            	//send ping
+						URL url = new URL("http://"+ instanceIp +":8000/ping");
+			       		HttpURLConnection con = (HttpURLConnection) url.openConnection();
+				   		con.setRequestMethod("GET");
+				   		status = 1;
+				   		System.out.println("Sucessfull ping for " + instanceIp);
 		            }
-
-					URL url = new URL("http://"+ this.instanceIp +":8000/ping");
-		       		HttpURLConnection con = (HttpURLConnection) url.openConnection();
-			   		con.setRequestMethod("GET");
-			   		status = 1;
-
-	           	} catch (ConnectException | UnknownHostException | InterruptedException e){
+	           	} catch (ConnectException | UnknownHostException e){
 					if(status == 1){
 						LoadBalancer.instanceList.remove(instanceId);
 						isAlive=false;
+					} else {
+						System.out.println("Connect exception. Instance not ready yet.");
 					}
-
-					System.out.println("Connect exception");
+				} catch (Exception e){
+					e.printStackTrace();
 				}
-				Thread.sleep(10000);
-			}			
+
+				try{
+					Thread.sleep(10000);
+				} catch (InterruptedException e){
+					e.printStackTrace();
+				}
+			}
 		}
-	}
+	};
 
 
 	HandleServer(AmazonEC2 ec2, String id) {
@@ -104,7 +115,7 @@ class HandleServer implements Runnable {
 		this.handling = new ArrayList<String>();
 		this.handled = new ArrayList<String>();
 		status = 0;
-		System.out.println("HandleServer for" + id + " created.");
+		System.out.println("HandleServer for " + id + " created.");
 
 	}
 
@@ -118,29 +129,38 @@ class HandleServer implements Runnable {
 
 	
 	public void sendRequest(HttpExchange request) {
+		System.out.println("a");
 		try{
+
+			//waits for instance to be ready
+			while (status != 1){
+				try{
+					System.out.println("Instance not ready. Retrying to send request..");
+					Thread.sleep(5000);
+				} catch (InterruptedException e){
+					e.printStackTrace();
+				}
+			}
 			
             //send request to the instance
 			URL url = new URL("http://"+ this.instanceIp +":8000/mzrun.html?"+request.getRequestURI().getQuery());
-			System.out.println(url.toString());
-			
 			HttpURLConnection con = (HttpURLConnection) url.openConnection();
 
 			handling.add(request.getRequestURI().getQuery());
 
 			con.setRequestMethod("GET");
 
+			//read response from the instance
 			BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
 			String inputLine;
 			String response = "";
-
 			while ((inputLine = in.readLine()) != null) {
 				response += inputLine + "\n";
 			}
 			in.close();
 
 
-			//get html response from the instance
+			//send response of the instance to the client
 			request.sendResponseHeaders(200, response.length());
 			OutputStream os = request.getResponseBody();
 			os.write(response.getBytes());
@@ -148,11 +168,9 @@ class HandleServer implements Runnable {
 
 			handling.remove(request.getRequestURI().getQuery());
 			handled.add(request.getRequestURI().getQuery());
-
-		} catch (ConnectException | UnknownHostException e){
-			System.out.println("Connect exception");
+		} catch (ConnectException e){
 			try{
-				Thread.sleep(10000);
+				Thread.sleep(5000);
 			} catch (InterruptedException ie){
 				ie.printStackTrace();
 			}
