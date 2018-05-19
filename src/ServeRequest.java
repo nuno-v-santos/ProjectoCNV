@@ -7,7 +7,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.sun.net.httpserver.HttpExchange;
 import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.Main;
@@ -15,7 +15,8 @@ import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.*;
 
 class ServeRequest implements Runnable {
 	private static final int CACHE_SIZE = 2;
-	public static ConcurrentSkipListSet<Integer> requestsCache= new ConcurrentSkipListSet<>();
+	private static ConcurrentLinkedQueue<Integer> requestsCache= new ConcurrentLinkedQueue<>();
+	private String outputPath = "outputs/A";
 	private Thread t;
 	private int hash;
 	private HttpExchange request;
@@ -30,10 +31,9 @@ class ServeRequest implements Runnable {
 	public void run() {
 		try {
 			// if the hash is in cache send response immediately
-			// add() returns false if the element is in the set
-			if(! requestsCache.add(hash)) {
+			if(requestsCache.contains(hash)) {
 				System.out.println("Thread " + hash + " is going to use the cache.");
-				Path path = Paths.get("outputs/A" + hash);
+				Path path = Paths.get(outputPath + hash);
 				request.sendResponseHeaders(200, Files.size(path));
 				OutputStream os = request.getResponseBody();
 				os.write(Files.readAllBytes(path));
@@ -68,7 +68,7 @@ class ServeRequest implements Runnable {
 					args[6] = "MazeRunner/" + attributes[1];
 				}
 			}
-			args[7] = "outputs/A" + hash;
+			args[7] = outputPath + hash;
 			
 			// execute maze runner
 			System.out.println("Thread " + hash + " going to calculate.");
@@ -87,13 +87,16 @@ class ServeRequest implements Runnable {
 			OutputStream os = request.getResponseBody();
 			os.write(Files.readAllBytes(path));
 			os.close();
-			
+
+			requestsCache.add(hash);
 			// maintain cache size
 			if(requestsCache.size() > CACHE_SIZE) {
-				int lastUsed = requestsCache.first();
+				int lastUsed = requestsCache.peek();
 				requestsCache.remove(lastUsed);
-				Files.delete(Paths.get("outputs/A" + lastUsed));
+				Files.delete(Paths.get(outputPath + lastUsed));
 			}
+			
+			for(Integer i : requestsCache) System.out.println(i);
 			
 			// adds the arguments to dynamo
 			WebServer.writeToDynamo(Thread.currentThread().getId(), args);
@@ -112,3 +115,4 @@ class ServeRequest implements Runnable {
 		}
 	}
 }
+
