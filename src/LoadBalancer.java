@@ -41,15 +41,7 @@ public class LoadBalancer {
       ec2 = AmazonEC2ClientBuilder.standard().withRegion("us-east-1a").withCredentials(new AWSStaticCredentialsProvider(credentials)).build();
     }
 
-
-    public static void main(String[] args) throws Exception {
-
-        System.out.println("===========================================");
-        System.out.println("Welcome to the AWS Java SDK!");
-        System.out.println("===========================================");
-
-        init();
-
+    private static void firstLoad(){
         /*
          * Amazon EC2
          *
@@ -119,6 +111,38 @@ public class LoadBalancer {
                 System.out.println("Reponse Status Code: " + ase.getStatusCode());
                 System.out.println("Error Code: " + ase.getErrorCode());
                 System.out.println("Request ID: " + ase.getRequestId());
+        }
+    }
+
+
+    public static void main(String[] args) throws Exception {
+
+        System.out.println("===========================================");
+        System.out.println("Welcome to the AWS Java SDK!");
+        System.out.println("===========================================");
+
+        init();
+        firstLoad();
+        System.out.println("First Load Finished");
+        System.out.println("Receiving Requests...");
+
+        HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
+        server.createContext("/mzrun.html", new MazeRunnerHandler());
+        server.start();
+
+        
+    }
+
+    //thread ping for each instance
+    //response updates load in each instance
+
+    static class MazeRunnerHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange t) throws IOException {
+            //check args
+            //check dynamo for metrics
+            //check running instances for their load
+            //send to correct instance based on dynamo metric and instance load/creat new instance
         }
     }
 }
