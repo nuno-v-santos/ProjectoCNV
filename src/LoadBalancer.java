@@ -32,7 +32,7 @@ import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 
 public class LoadBalancer {
-    private static HashMap<String,HandleServer> instanceList = new HashMap<String,HandleServer>();
+    public static HashMap<String,HandleServer> instanceList = new HashMap<String,HandleServer>();
     private static AmazonEC2 ec2;
 
     private static void init() throws Exception {
@@ -87,7 +87,7 @@ public class LoadBalancer {
                            .withSecurityGroups("CNV-ssh-http");
         RunInstancesResult runInstancesResult = ec2.runInstances(runInstancesRequest);
         String newInstanceId = runInstancesResult.getReservation().getInstances().get(0).getInstanceId();
-        HandleServer hs = new HandleServer(newInstanceId, ec2);
+        HandleServer hs = new HandleServer(ec2, newInstanceId);
         hs.start();
         instanceList.put(newInstanceId,hs);
     }

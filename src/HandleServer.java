@@ -53,50 +53,81 @@ class HandleServer implements Runnable {
 	private String instanceIp;
 	private String instanceId;
 	private AmazonEC2 ec2;
+	private ArrayList<String> handling;
+	private ArrayList<String> handled;
+	private boolean status = 0;
+	private Thread ping = new Thread(){
+		public void run(){
+			private boolean isAlive = true;
+			while(isAlive){
+				try{
+					if(instanceIp.equals("")){
+			   			DescribeInstancesResult describeInstancesRequest = ec2.describeInstances();
+	            		List<Reservation> reservations = describeInstancesRequest.getReservations();
+	            		Set<Instance> instances = new HashSet<Instance>();
+
+	            		for (Reservation reservation : reservations) {
+	                		instances.addAll(reservation.getInstances());
+	                	}	            	
+
+		            	for (Instance i : instances){
+		            		if (i.getInstanceId().equals(this.instanceId)){
+		            			this.instanceIp = i.getPublicIpAddress();
+		            			break;
+		            		}
+		            	}
+		            }
+
+					URL url = new URL("http://"+ this.instanceIp +":8000/ping");
+		       		HttpURLConnection con = (HttpURLConnection) url.openConnection();
+			   		con.setRequestMethod("GET");
+			   		status = 1;
+
+	           	} catch (ConnectException | UnknownHostException | InterruptedException e){
+					if(status == 1){
+						LoadBalancer.instanceList.remove(instanceId);
+						isAlive=false;
+					}
+
+					System.out.println("Connect exception");
+				}
+				Thread.sleep(10000);
+			}			
+		}
+	}
 
 
-	HandleServer(String id, AmazonEC2 ec2) {
+	HandleServer(AmazonEC2 ec2, String id) {
 		this.instanceId = id;
+		this.instanceIp = "";
 		this.ec2 = ec2;
+		this.handling = new ArrayList<String>();
+		this.handled = new ArrayList<String>();
+		status = 0;
 		System.out.println("HandleServer for" + id + " created.");
 
 	}
 
 	public void start() {
+		ping.start();
 	}
+
 
 	public void run() {
 	}
 
-	public void ping() {
-
-	}
-
+	
 	public void sendRequest(HttpExchange request) {
-		//http://<ip>:8000/mzrun.html?m=Maze50.maze&x0=1&y0=1&x1=6&y1=6&v=75&s=bfs
 		try{
-			DescribeInstancesResult describeInstancesRequest = ec2.describeInstances();
-            List<Reservation> reservations = describeInstancesRequest.getReservations();
-            Set<Instance> instances = new HashSet<Instance>();
-
-            for (Reservation reservation : reservations) {
-                instances.addAll(reservation.getInstances());
-            }
-
-            for (Instance i : instances){
-            	if (i.getInstanceId().equals(this.instanceId)){
-            		this.instanceIp = i.getPublicIpAddress();
-            		break;
-            	}
-            }
-
-            System.out.println(this.instanceIp);
-
+			
             //send request to the instance
 			URL url = new URL("http://"+ this.instanceIp +":8000/mzrun.html?"+request.getRequestURI().getQuery());
 			System.out.println(url.toString());
 			
 			HttpURLConnection con = (HttpURLConnection) url.openConnection();
+
+			handling.add(request.getRequestURI().getQuery());
+
 			con.setRequestMethod("GET");
 
 			BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
@@ -114,6 +145,10 @@ class HandleServer implements Runnable {
 			OutputStream os = request.getResponseBody();
 			os.write(response.getBytes());
 			os.close();
+
+			handling.remove(request.getRequestURI().getQuery());
+			handled.add(request.getRequestURI().getQuery());
+
 		} catch (ConnectException | UnknownHostException e){
 			System.out.println("Connect exception");
 			try{
