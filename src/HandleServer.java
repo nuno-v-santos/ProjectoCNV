@@ -139,11 +139,11 @@ class HandleServer implements Runnable {
 			os.close();
 
 			handling.remove(request.getRequestURI().getQuery());
-			if(handled.size < CACHE_SIZE){
+			if(handled.size() < CACHE_SIZE){
 				handled.add(request.getRequestURI().getQuery());
 			}
 			else{
-				requestsCache.remove(handled.get(0).hashCode());
+				LoadBalancer.requestsCache.remove(handled.get(0).hashCode());
 				handled.remove(0);
 				handled.add(request.getRequestURI().getQuery());
 			}

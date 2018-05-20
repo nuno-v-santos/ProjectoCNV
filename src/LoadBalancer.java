@@ -1,5 +1,6 @@
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.IOException;
@@ -21,6 +22,7 @@ import com.amazonaws.services.dynamodbv2.model.ComparisonOperator;
 import com.amazonaws.services.dynamodbv2.model.Condition;
 import com.amazonaws.services.dynamodbv2.model.CreateTableRequest;
 import com.amazonaws.services.dynamodbv2.model.DescribeTableRequest;
+import com.amazonaws.services.dynamodbv2.model.GetItemRequest;
 import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
 import com.amazonaws.services.dynamodbv2.model.KeyType;
 import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughput;
@@ -183,7 +185,7 @@ public class LoadBalancer {
 			}
 			
 			// choose instance
-			Double d = getMetric(request);
+			Double d = getMetric(request.getRequestURI().getQuery());
 			for (String i : instanceList.keySet()) {
 				hs = instanceList.get(i);
 				hs.sendRequest(request);
@@ -201,7 +203,8 @@ public class LoadBalancer {
 		}
 	}
 
-    private static double calculateHeuristic(String[] args) {
+    private static String calculateHeuristic(String a) {
+    	String[] args = a.split("&");
         int x0 = Integer.parseInt(args[1]);
         int y0 = Integer.parseInt(args[2]);
         int x1 = Integer.parseInt(args[3]);
@@ -209,52 +212,57 @@ public class LoadBalancer {
         int v = Integer.parseInt(args[5]);
         //int s = Integer.parseInt(args[6]);
         int m = Integer.parseInt(args[0].substring(4, args[0].length()-5));
-        return Math.sqrt((x1-x0)^2 + (y1-y0)^2) * 1/v * m ;
+        return Double.toString(Math.sqrt((x1-x0)^2 + (y1-y0)^2) * 1/v * m);
     }
 
-    public static Double getMetric(HttpExchange request) {
+    public static Double getMetric(String query) {
         //Check if table empty
         ScanRequest scanRequest = new ScanRequest(tableName);
-        ScanResult scanResultLT = dynamoDB.scan(scanRequest);
-        if (scanResult == null)
-            return 0;
-
-
-        // Check if its there
-        HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
-        Condition condition =  new Condition()
-                .withComparisonOperator(ComparisonOperator.EQUAL.toString())
-                .withAttributeValueList(new AttributeValue().withN(calculateHeuristic(request.getRequestURI().getQuery())));
-        scanFilter.put("h", condition);
-        ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
-        ScanResult scanResult = dynamoDB.scan(scanRequest);
-        if (scanResult != null){
-            return scanResult;
+        if (dynamoDB.scan(scanRequest).getCount() == 0) {
+        	System.out.println("Dynamo is empty");
+        	return .0;
         }
-
-        //get greater
+        String heuristic = calculateHeuristic(query);
+        
+        // Check if its there
+        HashMap<String,AttributeValue> key_to_get = new HashMap<String,AttributeValue>();
+        key_to_get.put("Heuristic", new AttributeValue().withN(heuristic));
+        GetItemRequest r = new GetItemRequest()
+                .withKey(key_to_get)
+                .withTableName(tableName);
+        Map<String, AttributeValue> returned_item = dynamoDB.getItem(r).getItem();
+        if (returned_item != null) {
+        	for (String key : returned_item.keySet()) {
+                System.out.format("Dynamo found match %s: %s\n", key, returned_item.get(key).toString());
+                return Double.parseDouble(returned_item.get(key).getN());
+        	}
+        }
+        
+        // weighted average between lower and higher values of dynamo
+        // get higher
         HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
         Condition condition =  new Condition()
                 .withComparisonOperator(ComparisonOperator.GT.toString())
-                .withAttributeValueList(new AttributeValue().withN(calculateHeuristic(request.getRequestURI().getQuery())));
-        scanFilter.put("h", condition);
-        ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter).withLimit(1);
+                .withAttributeValueList(new AttributeValue().withN(calculateHeuristic(query)));
+        scanFilter.put("Heuristic", condition);
+        scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter).withLimit(1);
         ScanResult scanResultGT = dynamoDB.scan(scanRequest);
 
         //get smaller
-        HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
-        Condition condition =  new Condition()
+        scanFilter = new HashMap<String, Condition>();
+        condition =  new Condition()
                 .withComparisonOperator(ComparisonOperator.LT.toString())
-                .withAttributeValueList(new AttributeValue().withN(calculateHeuristic(request.getRequestURI().getQuery())));
-        scanFilter.put("h", condition);
-        ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter).withLimit(1);
+                .withAttributeValueList(new AttributeValue().withN(calculateHeuristic(query)));
+        scanFilter.put("Heuristic", condition);
+        scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter).withLimit(1);
         ScanResult scanResultLT = dynamoDB.scan(scanRequest);
 
-        if (scanResultGT != null && scanResultLT != null)
+        /*if (scanResultGT != null && scanResultLT != null)
             return (scanResultGT + scanResultLT)/2;
         else if (scanResultGT != null)
             return scanResultGT;
-        else return scanResultLT;
+        else return scanResultLT;*/
+        return .0;
     }
 
     public static Thread autoscaler = new Thread(){
