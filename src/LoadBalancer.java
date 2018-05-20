@@ -203,7 +203,7 @@ public class LoadBalancer {
 		}
 	}
 
-    private static String calculateHeuristic(String a) {
+    private static double calculateHeuristic(String a) {
     	String[] args = a.split("&");
         int x0 = Integer.parseInt(args[1]);
         int y0 = Integer.parseInt(args[2]);
@@ -212,7 +212,7 @@ public class LoadBalancer {
         int v = Integer.parseInt(args[5]);
         //int s = Integer.parseInt(args[6]);
         int m = Integer.parseInt(args[0].substring(4, args[0].length()-5));
-        return Double.toString(Math.sqrt((x1-x0)^2 + (y1-y0)^2) * 1/v * m);
+        return Math.sqrt((x1-x0)^2 + (y1-y0)^2) * 1/v * m;
     }
 
     public static Double getMetric(String query) {
@@ -222,11 +222,11 @@ public class LoadBalancer {
         	System.out.println("Dynamo is empty");
         	return .0;
         }
-        String heuristic = calculateHeuristic(query);
+        double heuristic = calculateHeuristic(query);
         
         // Check if its there
         HashMap<String,AttributeValue> key_to_get = new HashMap<String,AttributeValue>();
-        key_to_get.put("Heuristic", new AttributeValue().withN(heuristic));
+        key_to_get.put("Heuristic", new AttributeValue().withN(Double.toString(heuristic)));
         GetItemRequest r = new GetItemRequest()
                 .withKey(key_to_get)
                 .withTableName(tableName);
@@ -243,25 +243,40 @@ public class LoadBalancer {
         HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
         Condition condition =  new Condition()
                 .withComparisonOperator(ComparisonOperator.GT.toString())
-                .withAttributeValueList(new AttributeValue().withN(calculateHeuristic(query)));
+                .withAttributeValueList(new AttributeValue().withN(Double.toString(heuristic)));
         scanFilter.put("Heuristic", condition);
-        scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter).withLimit(1);
+        scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
         ScanResult scanResultGT = dynamoDB.scan(scanRequest);
 
         //get smaller
         scanFilter = new HashMap<String, Condition>();
         condition =  new Condition()
                 .withComparisonOperator(ComparisonOperator.LT.toString())
-                .withAttributeValueList(new AttributeValue().withN(calculateHeuristic(query)));
+                .withAttributeValueList(new AttributeValue().withN(Double.toString(heuristic)));
         scanFilter.put("Heuristic", condition);
-        scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter).withLimit(1);
+        scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
         ScanResult scanResultLT = dynamoDB.scan(scanRequest);
-
-        /*if (scanResultGT != null && scanResultLT != null)
-            return (scanResultGT + scanResultLT)/2;
-        else if (scanResultGT != null)
-            return scanResultGT;
-        else return scanResultLT;*/
+        double lowerHeuristic = .0, lowerMetric = .0, higherHeuristic = .0, higherMetric = .0;
+        if (scanResultGT != null && scanResultLT != null) {
+            Map<String, AttributeValue> lower = scanResultLT.getItems().get(0);
+            for (Map.Entry<String, AttributeValue> pair : lower.entrySet()) {
+                lowerHeuristic = Double.parseDouble(pair.getKey());
+                lowerMetric = Double.parseDouble(pair.getValue().getN());
+            }
+            Map<String, AttributeValue> higher =  scanResultGT.getItems().get(0);
+            for (Map.Entry<String, AttributeValue> pair : higher.entrySet()) {
+            	higherHeuristic = Double.parseDouble(pair.getKey());
+                higherMetric = Double.parseDouble(pair.getValue().getN());
+            }
+            // weighted average formula
+            return lowerMetric + (higherMetric - lowerMetric) * ((heuristic - lowerHeuristic) / (higherHeuristic - lowerHeuristic));
+        } else if (scanResultLT != null) {
+            AttributeValue lower = (AttributeValue) scanResultLT.getItems().get(0).values().toArray()[0];
+            return Double.parseDouble(lower.getN());
+        } else if (scanResultGT != null){
+            AttributeValue higher = (AttributeValue) scanResultGT.getItems().get(0).values().toArray()[0];
+        	return Double.parseDouble(higher.getN());
+        }
         return .0;
     }
 
