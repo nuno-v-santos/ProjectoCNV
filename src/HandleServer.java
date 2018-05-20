@@ -20,6 +20,7 @@ import com.amazonaws.services.ec2.model.Reservation;
 class HandleServer implements Runnable {
 	private static final int MAX_RETRIES = 3;
 	private static final int TIME_BETWEEN_PINGS = 10000;
+	private static final int CACHE_SIZE = 2;
 	private String instanceIp;
 	private String instanceId;
 	private AmazonEC2 ec2;
@@ -72,7 +73,7 @@ class HandleServer implements Runnable {
 				}
 			}
 			// Instance died
-			LoadBalancer.instanceList.remove(instanceId);
+			kill();
 		}
 	};
 
@@ -81,7 +82,7 @@ class HandleServer implements Runnable {
 		this.instanceIp = "";
 		this.ec2 = ec2;
 		this.handling = new ArrayList<String>();
-		this.handled = new ArrayList<String>();
+		this.handled = new ArrayList<String>(CACHE_SIZE); 
 		System.out.println("HandleServer for " + id + " created.");
 
 	}
@@ -90,6 +91,7 @@ class HandleServer implements Runnable {
 		LoadBalancer.instanceList.remove(instanceId);
 		LoadBalancer.closeInstance(instanceId);
 		isAlive = false;
+		
 	}
 
 	public void start() {
@@ -101,8 +103,9 @@ class HandleServer implements Runnable {
 
 	public void sendRequest(HttpExchange request) {
 		try {
+			handling.add(request.getRequestURI().getQuery());
 			System.out.println("Received request");
-
+			/*
 			// waits for instance to be ready
 			while (instanceIp == null || instanceIp.equals("")) {
 				try {
@@ -111,14 +114,12 @@ class HandleServer implements Runnable {
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
-			}
+			}*/
 
 			// send request to the instance
 			URL url = new URL("http://" + this.instanceIp + ":8000/mzrun.html?" + request.getRequestURI().getQuery());
 
-			HttpURLConnection con = (HttpURLConnection) url.openConnection();
-
-			handling.add(request.getRequestURI().getQuery());
+			HttpURLConnection con = (HttpURLConnection) url.openConnection();			
 
 			con.setRequestMethod("GET");
 
@@ -138,7 +139,14 @@ class HandleServer implements Runnable {
 			os.close();
 
 			handling.remove(request.getRequestURI().getQuery());
-			handled.add(request.getRequestURI().getQuery());
+			if(handled.size < CACHE_SIZE){
+				handled.add(request.getRequestURI().getQuery());
+			}
+			else{
+				requestsCache.remove(handled.get(0).hashCode());
+				handled.remove(0);
+				handled.add(request.getRequestURI().getQuery());
+			}
 		} catch (ConnectException e) {
 			System.out.println("Retrying to send request");
 			handling.remove(request.getRequestURI().getQuery());

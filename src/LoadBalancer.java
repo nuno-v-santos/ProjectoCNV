@@ -47,7 +47,7 @@ public class LoadBalancer {
 	private static AmazonEC2 ec2;
 	private static final String tableName = "Metrics";
 	private static AmazonDynamoDB dynamoDB;
-	private static ConcurrentHashMap<Integer, HandleServer> requestsCache = new  ConcurrentHashMap<>();
+	public static ConcurrentHashMap<Integer, HandleServer> requestsCache = new  ConcurrentHashMap<>();
 	private static final int CACHE_SIZE = 1024;
 	
 	private static void init() throws Exception {
@@ -183,7 +183,7 @@ public class LoadBalancer {
 			}
 			
 			// choose instance
-			Double d = getMetric(request.getRequestURI().getQuery());
+			Double d = getMetric(request);
 			for (String i : instanceList.keySet()) {
 				hs = instanceList.get(i);
 				hs.sendRequest(request);
@@ -196,40 +196,65 @@ public class LoadBalancer {
 				}
 				break;
 			}
+
+
 		}
 	}
 
-    public static Double getMetric(String requestQuery) {
-        String[] receivedArgs = requestQuery.split("&");
-        String[] args = new String[8];
-        for (String arg : receivedArgs) {
-            String[] attributes = arg.split("=");
-            if (attributes[0].equals("x0")) {
-                args[0] = attributes[1];
-            } else if (attributes[0].equals("y0")) {
-                args[1] = attributes[1];
-            } else if (attributes[0].equals("x1")) {
-                args[2] = attributes[1];
-            } else if (attributes[0].equals("y1")) {
-                args[3] = attributes[1];
-            } else if (attributes[0].equals("v")) {
-                args[4] = attributes[1];
-            } else if (attributes[0].equals("s")) {
-                args[5] = attributes[1];
-            } else if (attributes[0].equals("m")) {
-                args[6] = "MazeRunner/" + attributes[1];
-            }
+    private static double calculateHeuristic(String[] args) {
+        int x0 = Integer.parseInt(args[1]);
+        int y0 = Integer.parseInt(args[2]);
+        int x1 = Integer.parseInt(args[3]);
+        int y1 = Integer.parseInt(args[4]);
+        int v = Integer.parseInt(args[5]);
+        //int s = Integer.parseInt(args[6]);
+        int m = Integer.parseInt(args[0].substring(4, args[0].length()-5));
+        return Math.sqrt((x1-x0)^2 + (y1-y0)^2) * 1/v * m ;
+    }
+
+    public static Double getMetric(HttpExchange request) {
+        //Check if table empty
+        ScanRequest scanRequest = new ScanRequest(tableName);
+        ScanResult scanResultLT = dynamoDB.scan(scanRequest);
+        if (scanResult == null)
+            return 0;
+
+
+        // Check if its there
+        HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
+        Condition condition =  new Condition()
+                .withComparisonOperator(ComparisonOperator.EQUAL.toString())
+                .withAttributeValueList(new AttributeValue().withN(calculateHeuristic(request.getRequestURI().getQuery())));
+        scanFilter.put("h", condition);
+        ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
+        ScanResult scanResult = dynamoDB.scan(scanRequest);
+        if (scanResult != null){
+            return scanResult;
         }
-        // Scan items for movies with a year attribute greater than 1985
+
+        //get greater
         HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
         Condition condition =  new Condition()
                 .withComparisonOperator(ComparisonOperator.GT.toString())
-                .withAttributeValueList(new AttributeValue().withN("1985"));
-        scanFilter.put("year", condition);
-        ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
-        ScanResult scanResult = dynamoDB.scan(scanRequest);
-        System.out.println("Result: " + scanResult);
-        return 1.;
+                .withAttributeValueList(new AttributeValue().withN(calculateHeuristic(request.getRequestURI().getQuery())));
+        scanFilter.put("h", condition);
+        ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter).withLimit(1);
+        ScanResult scanResultGT = dynamoDB.scan(scanRequest);
+
+        //get smaller
+        HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
+        Condition condition =  new Condition()
+                .withComparisonOperator(ComparisonOperator.LT.toString())
+                .withAttributeValueList(new AttributeValue().withN(calculateHeuristic(request.getRequestURI().getQuery())));
+        scanFilter.put("h", condition);
+        ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter).withLimit(1);
+        ScanResult scanResultLT = dynamoDB.scan(scanRequest);
+
+        if (scanResultGT != null && scanResultLT != null)
+            return (scanResultGT + scanResultLT)/2;
+        else if (scanResultGT != null)
+            return scanResultGT;
+        else return scanResultLT;
     }
 
     public static Thread autoscaler = new Thread(){
@@ -241,7 +266,7 @@ public class LoadBalancer {
                 for(String i : instanceList.keySet()) {
                     HandleServer hs = instanceList.get(i);
                     if (!hs.isBusy()){ //if instance is not busy
-                        if (toleratedFreeInstances == 0){
+                        if (toleratedFreeInstances <= 0){
                             hs.kill();
                         } else {
                             toleratedFreeInstances--;
