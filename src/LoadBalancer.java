@@ -4,6 +4,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -48,6 +51,7 @@ public class LoadBalancer {
 	private static final String tableName = "Metrics";
 	private static AmazonDynamoDB dynamoDB;
 	public static ConcurrentHashMap<Integer, HandleServer> requestsCache = new  ConcurrentHashMap<>();
+    public static ConcurrentHashMap<String, HandleServer> serverLoad = new  ConcurrentHashMap<>();
 	private static final int CACHE_SIZE = 1024;
 	
 	private static void init() throws Exception {
@@ -138,6 +142,8 @@ public class LoadBalancer {
 		HandleServer hs = new HandleServer(ec2, newInstanceId);
 		hs.start();
 		instanceList.put(newInstanceId, hs);
+        serverLoad.put("0;"+newInstanceId, hs);
+
 	}
 
 	public static void closeInstance(String i) {
@@ -166,7 +172,7 @@ public class LoadBalancer {
 		System.out.println("Receiving Requests...");
 	}
 
-	static class RedirectHandler implements HttpHandler {
+	public static class RedirectHandler implements HttpHandler {
 
 		@Override
 		public void handle(HttpExchange request) throws IOException {
@@ -174,8 +180,8 @@ public class LoadBalancer {
 			int requestHash = request.getRequestURI().getQuery().hashCode();
 			HandleServer hs = requestsCache.get(requestHash);
 			if(hs != null) {
-				if(hs.isAlive()) {
-					hs.sendRequest(request);
+				if(hs.isAlive() && hs.handling.size() < 10) {
+					hs.sendRequest(request,calculateHeuristic(request.getRequestURI().getQuery().split("&")));
 					return;
 				} else {
 					requestsCache.remove(requestHash);
@@ -184,24 +190,21 @@ public class LoadBalancer {
 			
 			// choose instance
 			Double d = getMetric(request);
-			for (String i : instanceList.keySet()) {
-				hs = instanceList.get(i);
-				hs.sendRequest(request);
-				// add to cache
-				requestsCache.put(requestHash, hs);
-				
-				// if limit is reached delete random entry
-				if(requestsCache.size() > CACHE_SIZE) {
-					requestsCache.remove(requestsCache.keys().nextElement());
-				}
-				break;
+
+            ArrayList<String> loads = new  ArrayList<String>();
+            loads.addAll(serverLoad.keySet());
+            Collections.sort(loads, new LoadComparator());
+            hs = serverLoad.get(loads.get(0));
+            hs.sendRequest(request,d);
+            
+            requestsCache.put(requestHash, hs);
+            if(requestsCache.size() > CACHE_SIZE) {
+				requestsCache.remove(requestsCache.keys().nextElement());
 			}
-
-
 		}
 	}
 
-    private static double calculateHeuristic(String[] args) {
+    public static double calculateHeuristic(String[] args) {
         int x0 = Integer.parseInt(args[1]);
         int y0 = Integer.parseInt(args[2]);
         int x1 = Integer.parseInt(args[3]);
@@ -213,48 +216,8 @@ public class LoadBalancer {
     }
 
     public static Double getMetric(HttpExchange request) {
-        //Check if table empty
-        ScanRequest scanRequest = new ScanRequest(tableName);
-        ScanResult scanResultLT = dynamoDB.scan(scanRequest);
-        if (scanResult == null)
-            return 0;
-
-
-        // Check if its there
-        HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
-        Condition condition =  new Condition()
-                .withComparisonOperator(ComparisonOperator.EQUAL.toString())
-                .withAttributeValueList(new AttributeValue().withN(calculateHeuristic(request.getRequestURI().getQuery())));
-        scanFilter.put("h", condition);
-        ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
-        ScanResult scanResult = dynamoDB.scan(scanRequest);
-        if (scanResult != null){
-            return scanResult;
-        }
-
-        //get greater
-        HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
-        Condition condition =  new Condition()
-                .withComparisonOperator(ComparisonOperator.GT.toString())
-                .withAttributeValueList(new AttributeValue().withN(calculateHeuristic(request.getRequestURI().getQuery())));
-        scanFilter.put("h", condition);
-        ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter).withLimit(1);
-        ScanResult scanResultGT = dynamoDB.scan(scanRequest);
-
-        //get smaller
-        HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
-        Condition condition =  new Condition()
-                .withComparisonOperator(ComparisonOperator.LT.toString())
-                .withAttributeValueList(new AttributeValue().withN(calculateHeuristic(request.getRequestURI().getQuery())));
-        scanFilter.put("h", condition);
-        ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter).withLimit(1);
-        ScanResult scanResultLT = dynamoDB.scan(scanRequest);
-
-        if (scanResultGT != null && scanResultLT != null)
-            return (scanResultGT + scanResultLT)/2;
-        else if (scanResultGT != null)
-            return scanResultGT;
-        else return scanResultLT;
+    	//peter did
+		return null;       
     }
 
     public static Thread autoscaler = new Thread(){
@@ -293,4 +256,17 @@ public class LoadBalancer {
             }
         }
     };
+
+    private static class LoadComparator implements Comparator<String> {
+        public LoadComparator() {
+        }
+        @Override
+        public int compare(String load1, String load2) {
+            if (Integer.parseInt(load2.split(";")[0]) < Integer.parseInt(load1.split(";")[0]))
+                return -1;
+            else
+                return 1;
+        }
+		
+    }
 }

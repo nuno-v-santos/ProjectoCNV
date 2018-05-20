@@ -24,10 +24,11 @@ class HandleServer implements Runnable {
 	private String instanceIp;
 	private String instanceId;
 	private AmazonEC2 ec2;
-	private ArrayList<String> handling;
-	private ArrayList<String> handled;
+	public ArrayList<HttpExchange> handling;
+	private ArrayList<HttpExchange> handled;
 	private int retries = 0;
 	private boolean isAlive = true;
+	private String load;
 	
 	public Thread ping = new Thread() {
 		public void run() {
@@ -81,13 +82,17 @@ class HandleServer implements Runnable {
 		this.instanceId = id;
 		this.instanceIp = "";
 		this.ec2 = ec2;
-		this.handling = new ArrayList<String>();
-		this.handled = new ArrayList<String>(CACHE_SIZE); 
+		this.handling = new ArrayList<HttpExchange>();
+		this.handled = new ArrayList<HttpExchange>(CACHE_SIZE); 
+		this.load = "0;"+id;
 		System.out.println("HandleServer for " + id + " created.");
 
 	}
 	
 	public void kill() {
+		for (HttpExchange r : handling){
+			// LoadBalancer.RedirectHandler.handle(r); how do i do this?
+		}
 		LoadBalancer.instanceList.remove(instanceId);
 		LoadBalancer.closeInstance(instanceId);
 		isAlive = false;
@@ -101,9 +106,15 @@ class HandleServer implements Runnable {
 	public void run() {
 	}
 
-	public void sendRequest(HttpExchange request) {
+	public void sendRequest(HttpExchange request, Double metric) {
 		try {
-			handling.add(request.getRequestURI().getQuery());
+			handling.add(request);
+
+			LoadBalancer.serverLoad.remove(load);
+			Double newload = Integer.parseInt(load.split(";")[0]) + metric;
+			load = newload + load.split(";")[1];
+			LoadBalancer.serverLoad.put(load,(HandleServer)this);
+
 			System.out.println("Received request");
 			/*
 			// waits for instance to be ready
@@ -138,15 +149,21 @@ class HandleServer implements Runnable {
 			os.write(response.getBytes());
 			os.close();
 
-			handling.remove(request.getRequestURI().getQuery());
-			if(handled.size < CACHE_SIZE){
-				handled.add(request.getRequestURI().getQuery());
+			handling.remove(request);
+			if(handled.size() < CACHE_SIZE){
+				handled.add(request);
 			}
 			else{
-				requestsCache.remove(handled.get(0).hashCode());
+				LoadBalancer.requestsCache.remove(handled.get(0).getRequestURI().getQuery().hashCode());
 				handled.remove(0);
-				handled.add(request.getRequestURI().getQuery());
+				handled.add(request);
 			}
+
+			LoadBalancer.serverLoad.remove(load);
+			newload = Integer.parseInt(load.split(";")[0]) - metric;
+			load = newload + load.split(";")[1];
+			LoadBalancer.serverLoad.put(load,(HandleServer)this);
+
 		} catch (ConnectException e) {
 			System.out.println("Retrying to send request");
 			handling.remove(request.getRequestURI().getQuery());
@@ -155,7 +172,7 @@ class HandleServer implements Runnable {
 			} catch (InterruptedException ie) {
 				ie.printStackTrace();
 			}
-			sendRequest(request);
+			sendRequest(request,metric);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
