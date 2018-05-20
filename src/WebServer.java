@@ -1,7 +1,6 @@
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -11,22 +10,12 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
-import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
-import com.amazonaws.services.dynamodbv2.model.CreateTableRequest;
-import com.amazonaws.services.dynamodbv2.model.DescribeTableRequest;
-import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
-import com.amazonaws.services.dynamodbv2.model.KeyType;
-import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughput;
 import com.amazonaws.services.dynamodbv2.model.PutItemRequest;
 import com.amazonaws.services.dynamodbv2.model.PutItemResult;
-import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
-import com.amazonaws.services.dynamodbv2.model.TableDescription;
-import com.amazonaws.services.dynamodbv2.util.TableUtils;
 
 public class WebServer {
 
@@ -65,27 +54,31 @@ public class WebServer {
     }
 
     public static void writeToDynamo(Long threadId, String[] args) {
-        //Write metrics
-        Double metric = threadMetrics.get(threadId);
+        String metric = threadMetrics.get(threadId).toString();
+        String heuristic = Double.toString(calculateHeuristic(args));
+        
         Map<String, AttributeValue> item = new HashMap<String, AttributeValue>();
-        System.out.println(Arrays.toString(args));
-        item.put("key", new AttributeValue(Integer.toString(args.hashCode())));
-        item.put("m", new AttributeValue(args[0]));
-        item.put("x0", new AttributeValue(args[1]));
-        item.put("y0", new AttributeValue(args[2]));
-        item.put("x1", new AttributeValue(args[3]));
-        item.put("y1", new AttributeValue(args[4]));
-        item.put("v", new AttributeValue(args[5]));
-        item.put("s", new AttributeValue(args[6]));
-        item.put("metric", new AttributeValue(metric.toString()));
+        item.put("Heuristic", new AttributeValue().withN(heuristic));
+        item.put("Metric", new AttributeValue().withN(metric));
         PutItemRequest putItemRequest = new PutItemRequest(tableName, item);
         PutItemResult putItemResult = dynamoDB.putItem(putItemRequest);
+        
         System.out.println("Result: " + putItemResult);
-        System.out.println("Thread writing metrics: " + args + ":" + metric.toString());
+        System.out.println("Thread writing metrics: " + args + ":" + metric);
     }
 
-    private static void initializeDataBase() throws Exception {
+    private static double calculateHeuristic(String[] args) {
+        int x0 = Integer.parseInt(args[1]);
+        int y0 = Integer.parseInt(args[2]);
+        int x1 = Integer.parseInt(args[3]);
+        int y1 = Integer.parseInt(args[4]);
+        int v = Integer.parseInt(args[5]);
+        //int s = Integer.parseInt(args[6]);
+        int m = Integer.parseInt(args[0].substring(4, args[0].length()-5));
+		return Math.sqrt((x1-x0)^2 + (y1-y0)^2) * 1/v * m ;
+	}
 
+	private static void initializeDataBase() throws Exception {
         ProfileCredentialsProvider credentialsProvider = new ProfileCredentialsProvider();
         try {
             credentialsProvider.getCredentials();
@@ -100,37 +93,6 @@ public class WebServer {
             .withCredentials(credentialsProvider)
             .withRegion("us-east-1")
             .build();
-
-        try {
-            // Create a table with a primary hash key named 'name', which holds a string
-            CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
-                .withKeySchema(new KeySchemaElement().withAttributeName("key").withKeyType(KeyType.HASH))
-                .withAttributeDefinitions(new AttributeDefinition().withAttributeName("key").withAttributeType(ScalarAttributeType.S))
-                .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(1L).withWriteCapacityUnits(1L));
-
-            // Create table if it does not exist yet
-            TableUtils.createTableIfNotExists(dynamoDB, createTableRequest);
-            // wait for the table to move into ACTIVE state
-            TableUtils.waitUntilActive(dynamoDB, tableName);
-
-            // Describe our new table
-            DescribeTableRequest describeTableRequest = new DescribeTableRequest().withTableName(tableName);
-            TableDescription tableDescription = dynamoDB.describeTable(describeTableRequest).getTable();
-            System.out.println("Table Description: " + tableDescription);
-        } catch (AmazonServiceException ase) {
-            System.out.println("Caught an AmazonServiceException, which means your request made it "
-                    + "to AWS, but was rejected with an error response for some reason.");
-            System.out.println("Error Message:    " + ase.getMessage());
-            System.out.println("HTTP Status Code: " + ase.getStatusCode());
-            System.out.println("AWS Error Code:   " + ase.getErrorCode());
-            System.out.println("Error Type:       " + ase.getErrorType());
-            System.out.println("Request ID:       " + ase.getRequestId());
-        } catch (AmazonClientException ace) {
-            System.out.println("Caught an AmazonClientException, which means the client encountered "
-                    + "a serious internal problem while trying to communicate with AWS, "
-                    + "such as not being able to access the network.");
-            System.out.println("Error Message: " + ace.getMessage());
-        }
     }
 }
 
