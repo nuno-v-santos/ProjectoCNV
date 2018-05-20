@@ -68,13 +68,13 @@ public class WebServer {
     }
 
     private static double calculateHeuristic(String[] args) {
-        int x0 = Integer.parseInt(args[1]);
-        int y0 = Integer.parseInt(args[2]);
-        int x1 = Integer.parseInt(args[3]);
-        int y1 = Integer.parseInt(args[4]);
-        int v = Integer.parseInt(args[5]);
-        //int s = Integer.parseInt(args[6]);
-        int m = Integer.parseInt(args[0].substring(4, args[0].length()-5));
+        int x0 = Integer.parseInt(args[0]);
+        int y0 = Integer.parseInt(args[1]);
+        int x1 = Integer.parseInt(args[2]);
+        int y1 = Integer.parseInt(args[3]);
+        int v = Integer.parseInt(args[4]);
+        //int s = Integer.parseInt(args[5]);
+        int m = Integer.parseInt(args[6].substring(15, args[6].length()-5));
 		return Math.sqrt((x1-x0)^2 + (y1-y0)^2) * 1/v * m ;
 	}
 
