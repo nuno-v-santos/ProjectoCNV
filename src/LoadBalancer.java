@@ -45,16 +45,19 @@ import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 
 public class LoadBalancer {
-    private static final String IMAGE_ID = "ami-7431ad0b";
+    private static final String IMAGE_ID = "ami-e860fe97";
     private static final String AWS_KEY = "CNV";
     private static final String AWS_SECURITY_GROUP = "CNV-ssh-http";
+    private static final int MAX_EQUAL_REQUESTS_PER_SERVER = 10;
+    private static final int CACHE_SIZE = 1024;
+	private static final String TABLE_NAME = "Metrics";
+
 	public static ConcurrentHashMap<String, HandleServer> instanceList = new ConcurrentHashMap<>();
-	private static AmazonEC2 ec2;
-	private static final String tableName = "Metrics";
-	private static AmazonDynamoDB dynamoDB;
 	public static ConcurrentHashMap<Integer, HandleServer> requestsCache = new  ConcurrentHashMap<>();
     public static ConcurrentHashMap<String, HandleServer> serverLoad = new  ConcurrentHashMap<>();
-	private static final int CACHE_SIZE = 1024;
+
+	private static AmazonEC2 ec2;
+	private static AmazonDynamoDB dynamoDB;
 	
 	private static void init() throws Exception {
 
@@ -101,7 +104,7 @@ public class LoadBalancer {
 
 		try {
 			// Create a table with a primary hash key named 'name', which holds a string
-			CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
+			CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(TABLE_NAME)
 					.withKeySchema(new KeySchemaElement().withAttributeName("Heuristic").withKeyType(KeyType.HASH))
 					.withAttributeDefinitions(
 							new AttributeDefinition().withAttributeName("Heuristic").withAttributeType(ScalarAttributeType.S))
@@ -111,10 +114,10 @@ public class LoadBalancer {
 			// Create table if it does not exist yet
 			TableUtils.createTableIfNotExists(dynamoDB, createTableRequest);
 			// wait for the table to move into ACTIVE state
-			TableUtils.waitUntilActive(dynamoDB, tableName);
+			TableUtils.waitUntilActive(dynamoDB, TABLE_NAME);
 
 			// Describe our new table
-			DescribeTableRequest describeTableRequest = new DescribeTableRequest().withTableName(tableName);
+			DescribeTableRequest describeTableRequest = new DescribeTableRequest().withTableName(TABLE_NAME);
 			TableDescription tableDescription = dynamoDB.describeTable(describeTableRequest).getTable();
 			System.out.println("Table Description: " + tableDescription);
 		} catch (AmazonServiceException ase) {
@@ -145,14 +148,13 @@ public class LoadBalancer {
 		hs.start();
 		instanceList.put(newInstanceId, hs);
         serverLoad.put("0;"+newInstanceId, hs);
-
 	}
 
-	public static void closeInstance(String i) {
+	public static void closeInstance(String id) {
 		TerminateInstancesRequest termInstanceReq;
-		System.out.println("Terminating the instance: " + i);
+		System.out.println("Terminating the instance: " + id);
 		termInstanceReq = new TerminateInstancesRequest();
-		termInstanceReq.withInstanceIds(i);
+		termInstanceReq.withInstanceIds(id);
 		ec2.terminateInstances(termInstanceReq);
 	}
 
@@ -166,6 +168,7 @@ public class LoadBalancer {
 
 		HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
 		server.createContext("/mzrun.html", new RedirectHandler());
+		server.createContext("/ping", new PingHandler());
 		server.start();
 
 		newInstance();
@@ -173,6 +176,17 @@ public class LoadBalancer {
 
 		System.out.println("Receiving Requests...");
 	}
+
+	static class PingHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange t) throws IOException {
+            String response = "This was the query:" + t.getRequestURI().getQuery()   + "##";
+            t.sendResponseHeaders(200, response.length());
+            OutputStream os = t.getResponseBody();
+            os.write(response.getBytes());
+            os.close();
+        }
+    }
 
 	public static class RedirectHandler implements HttpHandler {
 
@@ -182,24 +196,27 @@ public class LoadBalancer {
 			int requestHash = request.getRequestURI().getQuery().hashCode();
 			HandleServer hs = requestsCache.get(requestHash);
 			if(hs != null) {
-				if(hs.isAlive() && hs.handling.size() < 10) {
+				if(hs.isAlive() && hs.handling.size() < MAX_EQUAL_REQUESTS_PER_SERVER) {
+					System.out.println("Sending request to cache");
 					hs.sendRequest(request,calculateHeuristic(request.getRequestURI().getQuery()));
 					return;
 				} else {
 					requestsCache.remove(requestHash);
 				}
 			}
-			
-			// choose instance
 
-			Double d = getMetric(request.getRequestURI().getQuery());
+			// choose instance
+			Double metric = getMetric(request.getRequestURI().getQuery());
             ArrayList<String> loads = new  ArrayList<String>();
             loads.addAll(serverLoad.keySet());
             Collections.sort(loads, new LoadComparator());
             hs = serverLoad.get(loads.get(0));
-            hs.sendRequest(request,d);
-            
+            System.out.println("Sending request");
+            hs.sendRequest(request, metric);
+
+            System.out.println("Adding to cache. Cache size = " + requestsCache.size());
             requestsCache.put(requestHash, hs);
+            System.out.println("Added to cache. Cache size = " + requestsCache.size());
             if(requestsCache.size() > CACHE_SIZE) {
 				requestsCache.remove(requestsCache.keys().nextElement());
 			}
@@ -207,8 +224,9 @@ public class LoadBalancer {
 	}
 
 
-    private static double calculateHeuristic(String a) {
-    	String[] args = a.split("&");
+    private static double calculateHeuristic(String query) {
+    	System.out.println("Calculating heuristic of query -> " + query);
+    	String[] args = query.split("&");
         int x0 = Integer.parseInt(args[0]);
         int y0 = Integer.parseInt(args[1]);
         int x1 = Integer.parseInt(args[2]);
@@ -216,12 +234,13 @@ public class LoadBalancer {
         int v = Integer.parseInt(args[4]);
         //int s = Integer.parseInt(args[5]);
         int m = Integer.parseInt(args[6].substring(15, args[6].length()-5));
+        System.out.println("Heuristic is -> " + Math.sqrt((x1-x0)^2 + (y1-y0)^2) * 1/v * m);
 		return Math.sqrt((x1-x0)^2 + (y1-y0)^2) * 1/v * m ;
 	}
 
     public static Double getMetric(String query) {
         //Check if table empty
-        ScanRequest scanRequest = new ScanRequest(tableName);
+        ScanRequest scanRequest = new ScanRequest(TABLE_NAME);
         if (dynamoDB.scan(scanRequest).getCount() == 0) {
         	System.out.println("Dynamo is empty");
         	return .0;
@@ -233,7 +252,7 @@ public class LoadBalancer {
         key_to_get.put("Heuristic", new AttributeValue().withN(Double.toString(heuristic)));
         GetItemRequest r = new GetItemRequest()
                 .withKey(key_to_get)
-                .withTableName(tableName);
+                .withTableName(TABLE_NAME);
         Map<String, AttributeValue> returned_item = dynamoDB.getItem(r).getItem();
         if (returned_item != null) {
         	for (String key : returned_item.keySet()) {
@@ -249,7 +268,7 @@ public class LoadBalancer {
                 .withComparisonOperator(ComparisonOperator.GT.toString())
                 .withAttributeValueList(new AttributeValue().withN(Double.toString(heuristic)));
         scanFilter.put("Heuristic", condition);
-        scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
+        scanRequest = new ScanRequest(TABLE_NAME).withScanFilter(scanFilter);
         ScanResult scanResultGT = dynamoDB.scan(scanRequest);
 
         //get smaller
@@ -258,8 +277,12 @@ public class LoadBalancer {
                 .withComparisonOperator(ComparisonOperator.LT.toString())
                 .withAttributeValueList(new AttributeValue().withN(Double.toString(heuristic)));
         scanFilter.put("Heuristic", condition);
-        scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
+        scanRequest = new ScanRequest(TABLE_NAME).withScanFilter(scanFilter);
         ScanResult scanResultLT = dynamoDB.scan(scanRequest);
+
+        System.out.println("Results LT -> " + scanResultLT);
+        System.out.println("Results GT -> " + scanResultGT);
+
         double lowerHeuristic = .0, lowerMetric = .0, higherHeuristic = .0, higherMetric = .0;
         if (scanResultGT != null && scanResultLT != null) {
             Map<String, AttributeValue> lower = scanResultLT.getItems().get(0);
@@ -292,11 +315,11 @@ public class LoadBalancer {
                 int toleratedFreeInstances = 1;         //number of free instances possible
                 for(String i : instanceList.keySet()) {
                     HandleServer hs = instanceList.get(i);
-                    if (!hs.isBusy()){ //if instance is not busy
-                        if (toleratedFreeInstances <= 0){
-                            hs.kill();
-                        } else {
+                    if (hs.isFree()){ //if instance is not busy
+                        if (toleratedFreeInstances > 0){
                             toleratedFreeInstances--;
+                        } else {
+                            hs.kill();
                         }
                     }
                 }
@@ -313,7 +336,7 @@ public class LoadBalancer {
                 }
 
                 try{
-                    Thread.sleep(5000);
+                    Thread.sleep(30000);
                 } catch (InterruptedException e){
                     e.printStackTrace();
                 }
@@ -326,6 +349,7 @@ public class LoadBalancer {
         }
         @Override
         public int compare(String load1, String load2) {
+        	System.out.println("In compare");
             if (Integer.parseInt(load2.split(";")[0]) < Integer.parseInt(load1.split(";")[0]))
                 return -1;
             else

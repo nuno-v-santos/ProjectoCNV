@@ -21,21 +21,22 @@ class HandleServer implements Runnable {
 	private static final int MAX_RETRIES = 3;
 	private static final int TIME_BETWEEN_PINGS = 10000;
 	private static final int CACHE_SIZE = 2;
+	private static final double THRESHOLD_VALUE = 18788059;  //TODO: choose value here
 	private String instanceIp;
 	private String instanceId;
 	private AmazonEC2 ec2;
 	public ArrayList<HttpExchange> handling;
 	private ArrayList<HttpExchange> handled;
 	private int retries = 0;
-	private boolean isAlive = true;
+	private int status = 0;  //0:no ip  1:ip but not ready  2:running   3:dead
 	private String load;
 	
 	public Thread ping = new Thread() {
 		public void run() {
-			while (isAlive) {
+			while (status < 3) {
 				// we assume the instance will be alive once
 				// if the ip address is not defined yet
-				if (instanceIp == null || instanceIp.equals("")) {
+				if (status == 0) {
 					DescribeInstancesResult describeInstancesRequest = ec2.describeInstances();
 					List<Reservation> reservations = describeInstancesRequest.getReservations();
 					Set<Instance> instances = new HashSet<Instance>();
@@ -47,23 +48,27 @@ class HandleServer implements Runnable {
 					for (Instance i : instances) {
 						if (i.getInstanceId().equals(instanceId)) {
 							instanceIp = i.getPublicIpAddress();
+							if (instanceIp == null || instanceIp.equals(""))
+								status = 1;
 							break;
 						}
 					}
 					System.out.println("Failed ping. IP not defined yet.");
 				} else {
-					// send ping
-
 					try {
 						URL url = new URL("http://" + instanceIp + ":8000/ping");
 						HttpURLConnection con = (HttpURLConnection) url.openConnection();
 						con.setRequestMethod("GET");
-						System.out.println("Sucessfull ping for " + instanceIp);
-					} catch (IOException e) {
-						if(retries++ < MAX_RETRIES) {
-							isAlive = false;
+						if (con.getRequestCode() == 200){
+							System.out.println("Sucessfull ping for " + instanceIp);
+							status = 2;
+						} else {
+							System.out.println("Failed ping " + instanceIp);
 						}
-
+					} catch (IOException e) {
+						if(retries++ > MAX_RETRIES && status == 2) {
+							status = 3;
+						}
 					}
 				}
 
@@ -73,12 +78,13 @@ class HandleServer implements Runnable {
 					e.printStackTrace();
 				}
 			}
+
 			// Instance died
 			kill();
 		}
 	};
 
-	HandleServer(AmazonEC2 ec2, String id) {
+	public HandleServer(AmazonEC2 ec2, String id) {
 		this.instanceId = id;
 		this.instanceIp = "";
 		this.ec2 = ec2;
@@ -96,7 +102,6 @@ class HandleServer implements Runnable {
 		LoadBalancer.instanceList.remove(instanceId);
 		LoadBalancer.closeInstance(instanceId);
 		isAlive = false;
-		
 	}
 
 	public void start() {
@@ -109,6 +114,7 @@ class HandleServer implements Runnable {
 	public void sendRequest(HttpExchange request, Double metric) {
 		try {
 			handling.add(request);
+
 			LoadBalancer.serverLoad.remove(load);
 			Double newload = Integer.parseInt(load.split(";")[0]) + metric;
 			load = newload + load.split(";")[1];
@@ -182,17 +188,18 @@ class HandleServer implements Runnable {
 	}
 
 	public boolean isAlive() {
-		return isAlive;
+		return status != 3;
 	}
 
-	public boolean isBusy(){
-		return handling.size() != 0;
+	public boolean isFree(){
+		return handling.size() == 0;
 	}
 
 	public boolean readyForRequest(){
+		System.out.println("Calculating ready for request");
 		if (handling.size() == 0)   //if it doesnt have requests
 			return true;
-		if (handling.size() == 1 && LoadBalancer.getMetric(handling.get(0).getRequestURI().getQuery()) == 0)  //if it has one request but is a small one
+		if (Integer.parseInt(load.split(";")[0]) <= THRESHOLD_VALUE)  //if it has one request but is a small one
 			return true;
 		return false;
 	}
