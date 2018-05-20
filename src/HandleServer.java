@@ -109,7 +109,6 @@ class HandleServer implements Runnable {
 	public void sendRequest(HttpExchange request, Double metric) {
 		try {
 			handling.add(request);
-
 			LoadBalancer.serverLoad.remove(load);
 			Double newload = Integer.parseInt(load.split(";")[0]) + metric;
 			load = newload + load.split(";")[1];
@@ -166,7 +165,7 @@ class HandleServer implements Runnable {
 
 		} catch (ConnectException e) {
 			System.out.println("Retrying to send request");
-			handling.remove(request.getRequestURI().getQuery());
+			handling.remove(request);
 			try {
 				Thread.sleep(5000);
 			} catch (InterruptedException ie) {
@@ -193,7 +192,7 @@ class HandleServer implements Runnable {
 	public boolean readyForRequest(){
 		if (handling.size() == 0)   //if it doesnt have requests
 			return true;
-		if (handling.size() == 1 && LoadBalancer.getMetric(handling.get(0)) == 0)  //if it has one request but is a small one
+		if (handling.size() == 1 && LoadBalancer.getMetric(handling.get(0).getRequestURI().getQuery()) == 0)  //if it has one request but is a small one
 			return true;
 		return false;
 	}
