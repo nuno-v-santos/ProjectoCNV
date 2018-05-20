@@ -19,6 +19,7 @@ import com.amazonaws.services.ec2.model.Reservation;
 
 class HandleServer implements Runnable {
 	private static final int MAX_RETRIES = 3;
+	private static final int TIME_BETWEEN_PINGS = 10000;
 	private String instanceIp;
 	private String instanceId;
 	private AmazonEC2 ec2;
@@ -60,11 +61,12 @@ class HandleServer implements Runnable {
 						if(retries++ < MAX_RETRIES) {
 							isAlive = false;
 						}
+
 					}
 				}
 
 				try {
-					Thread.sleep(10000);
+					Thread.sleep(TIME_BETWEEN_PINGS);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -92,11 +94,11 @@ class HandleServer implements Runnable {
 	}
 
 	public void sendRequest(HttpExchange request) {
-		System.out.println("a");
 		try {
+			System.out.println("Received request");
 
 			// waits for instance to be ready
-			while (! isAlive) {
+			while (instanceIp == null || instanceIp.equals("")) {
 				try {
 					System.out.println("Instance not ready. Retrying to send request..");
 					Thread.sleep(5000);
@@ -107,6 +109,7 @@ class HandleServer implements Runnable {
 
 			// send request to the instance
 			URL url = new URL("http://" + this.instanceIp + ":8000/mzrun.html?" + request.getRequestURI().getQuery());
+
 			HttpURLConnection con = (HttpURLConnection) url.openConnection();
 
 			handling.add(request.getRequestURI().getQuery());
@@ -131,6 +134,8 @@ class HandleServer implements Runnable {
 			handling.remove(request.getRequestURI().getQuery());
 			handled.add(request.getRequestURI().getQuery());
 		} catch (ConnectException e) {
+			System.out.println("Retrying to send request");
+			handling.remove(request.getRequestURI().getQuery());
 			try {
 				Thread.sleep(5000);
 			} catch (InterruptedException ie) {
@@ -148,5 +153,17 @@ class HandleServer implements Runnable {
 
 	public boolean isAlive() {
 		return isAlive;
+	}
+
+	public boolean isBusy(){
+		return handling.size() != 0;
+	}
+
+	public boolean readyForRequest(){
+		if (handling.size() == 0)   //if it doesnt have requests
+			return true;
+		if (handling.size() == 1 && LoadBalancer.getMetric(handling.get(0)) == 0)  //if it has one request but is a small one
+			return true;
+		return false;
 	}
 }

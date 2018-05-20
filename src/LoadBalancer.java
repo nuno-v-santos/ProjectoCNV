@@ -45,6 +45,9 @@ import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 
 public class LoadBalancer {
+    private static final String IMAGE_ID = "ami-7431ad0b";
+    private static final String AWS_KEY = "CNV";
+    private static final String AWS_SECURITY_GROUP = "CNV-ssh-http";
 	public static ConcurrentHashMap<String, HandleServer> instanceList = new ConcurrentHashMap<>();
 	private static AmazonEC2 ec2;
 	private static final String tableName = "Metrics";
@@ -133,8 +136,8 @@ public class LoadBalancer {
 	public static void newInstance() {
 		System.out.println("Starting a new instance.");
 		RunInstancesRequest runInstancesRequest = new RunInstancesRequest();
-		runInstancesRequest.withImageId("ami-7431ad0b").withInstanceType("t2.micro").withMinCount(1).withMaxCount(1)
-				.withKeyName("CNV").withSecurityGroups("CNV-ssh-http");
+		runInstancesRequest.withImageId(IMAGE_ID).withInstanceType("t2.micro").withMinCount(1).withMaxCount(1)
+				.withKeyName(AWS_KEY).withSecurityGroups(AWS_SECURITY_GROUP);
 		RunInstancesResult runInstancesResult = ec2.runInstances(runInstancesRequest);
 		String newInstanceId = runInstancesResult.getReservation().getInstances().get(0).getInstanceId();
 		HandleServer hs = new HandleServer(ec2, newInstanceId);
@@ -142,11 +145,11 @@ public class LoadBalancer {
 		instanceList.put(newInstanceId, hs);
 	}
 
-	public void closeInstance(Instance i) {
+	public static void closeInstance(String i) {
 		TerminateInstancesRequest termInstanceReq;
-		System.out.println("Terminating the instance:" + i);
+		System.out.println("Terminating the instance: " + i);
 		termInstanceReq = new TerminateInstancesRequest();
-		termInstanceReq.withInstanceIds(i.getInstanceId());
+		termInstanceReq.withInstanceIds(i);
 		ec2.terminateInstances(termInstanceReq);
 	}
 
@@ -163,6 +166,7 @@ public class LoadBalancer {
 		server.start();
 
 		newInstance();
+        autoscaler.start();
 
 		System.out.println("Receiving Requests...");
 	}
@@ -198,38 +202,78 @@ public class LoadBalancer {
 				break;
 			}
 		}
-
-		private static Double getMetric(String requestQuery) {
-			String[] receivedArgs = requestQuery.split("&");
-			String[] args = new String[8];
-			for (String arg : receivedArgs) {
-				String[] attributes = arg.split("=");
-				if (attributes[0].equals("x0")) {
-					args[0] = attributes[1];
-				} else if (attributes[0].equals("y0")) {
-					args[1] = attributes[1];
-				} else if (attributes[0].equals("x1")) {
-					args[2] = attributes[1];
-				} else if (attributes[0].equals("y1")) {
-					args[3] = attributes[1];
-				} else if (attributes[0].equals("v")) {
-					args[4] = attributes[1];
-				} else if (attributes[0].equals("s")) {
-					args[5] = attributes[1];
-				} else if (attributes[0].equals("m")) {
-					args[6] = "MazeRunner/" + attributes[1];
-				}
-			}
-			// Scan items for movies with a year attribute greater than 1985
-			HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
-			Condition condition =  new Condition()
-					.withComparisonOperator(ComparisonOperator.GT.toString())
-					.withAttributeValueList(new AttributeValue().withN("1985"));
-			scanFilter.put("year", condition);
-			ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
-			ScanResult scanResult = dynamoDB.scan(scanRequest);
-			System.out.println("Result: " + scanResult);
-			return 1.;
-		}
 	}
+
+    public static Double getMetric(String requestQuery) {
+        String[] receivedArgs = requestQuery.split("&");
+        String[] args = new String[8];
+        for (String arg : receivedArgs) {
+            String[] attributes = arg.split("=");
+            if (attributes[0].equals("x0")) {
+                args[0] = attributes[1];
+            } else if (attributes[0].equals("y0")) {
+                args[1] = attributes[1];
+            } else if (attributes[0].equals("x1")) {
+                args[2] = attributes[1];
+            } else if (attributes[0].equals("y1")) {
+                args[3] = attributes[1];
+            } else if (attributes[0].equals("v")) {
+                args[4] = attributes[1];
+            } else if (attributes[0].equals("s")) {
+                args[5] = attributes[1];
+            } else if (attributes[0].equals("m")) {
+                args[6] = "MazeRunner/" + attributes[1];
+            }
+        }
+        // Scan items for movies with a year attribute greater than 1985
+        HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
+        Condition condition =  new Condition()
+                .withComparisonOperator(ComparisonOperator.GT.toString())
+                .withAttributeValueList(new AttributeValue().withN("1985"));
+        scanFilter.put("year", condition);
+        ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
+        ScanResult scanResult = dynamoDB.scan(scanRequest);
+        System.out.println("Result: " + scanResult);
+        return 1.;
+    }
+
+    public static Thread autoscaler = new Thread(){
+        ArrayList<String> terminated = new ArrayList<>();
+        public void run(){
+            while(true){
+
+                //auto-scaler decrease rules
+                int toleratedFreeInstances = 1;         //number of free instances possible
+                for(String i : instanceList.keySet()) {
+                    HandleServer hs = instanceList.get(i);
+                    if (!hs.isBusy() && !terminated.contains(i)){ //if instance is not busy
+                        if (toleratedFreeInstances == 0){
+                            closeInstance(i);
+                            terminated.add(i);
+                        } else {
+                            toleratedFreeInstances--;
+                        }
+                    }
+                }
+
+
+                //auto-scaler increase rules
+                int freeToReceive = 0;         //number of instances that have no requests or have only a small one
+                for(String i : instanceList.keySet()) {
+                    HandleServer hs = instanceList.get(i);
+                    if (hs.readyForRequest())
+                        freeToReceive++;
+                }
+                if (freeToReceive == 0){
+                    newInstance();
+                }
+
+                try{
+                    Thread.sleep(5000);
+                } catch (InterruptedException e){
+                    e.printStackTrace();
+                }
+            }
+        }
+    };
 }
