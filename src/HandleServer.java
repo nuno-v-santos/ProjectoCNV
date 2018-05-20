@@ -85,6 +85,12 @@ class HandleServer implements Runnable {
 		System.out.println("HandleServer for " + id + " created.");
 
 	}
+	
+	public void kill() {
+		LoadBalancer.instanceList.remove(instanceId);
+		LoadBalancer.closeInstance(instanceId);
+		isAlive = false;
+	}
 
 	public void start() {
 		ping.start();

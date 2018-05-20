@@ -1,14 +1,9 @@
 import java.util.HashSet;
-import java.util.*;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -238,7 +233,6 @@ public class LoadBalancer {
     }
 
     public static Thread autoscaler = new Thread(){
-        ArrayList<String> terminated = new ArrayList<>();
         public void run(){
             while(true){
 
@@ -246,16 +240,14 @@ public class LoadBalancer {
                 int toleratedFreeInstances = 1;         //number of free instances possible
                 for(String i : instanceList.keySet()) {
                     HandleServer hs = instanceList.get(i);
-                    if (!hs.isBusy() && !terminated.contains(i)){ //if instance is not busy
+                    if (!hs.isBusy()){ //if instance is not busy
                         if (toleratedFreeInstances == 0){
-                            closeInstance(i);
-                            terminated.add(i);
+                            hs.kill();
                         } else {
                             toleratedFreeInstances--;
                         }
                     }
                 }
-
 
                 //auto-scaler increase rules
                 int freeToReceive = 0;         //number of instances that have no requests or have only a small one
