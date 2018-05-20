@@ -1,9 +1,11 @@
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -54,7 +56,7 @@ public class LoadBalancer {
 
 	public static ConcurrentHashMap<String, HandleServer> instanceList = new ConcurrentHashMap<>();
 	public static ConcurrentHashMap<Integer, HandleServer> requestsCache = new  ConcurrentHashMap<>();
-    public static ConcurrentHashMap<String, HandleServer> serverLoad = new  ConcurrentHashMap<>();
+    public static ConcurrentHashMap<HandleServer, Double> serverLoad = new  ConcurrentHashMap<>();
 
 	private static AmazonEC2 ec2;
 	private static AmazonDynamoDB dynamoDB;
@@ -147,7 +149,7 @@ public class LoadBalancer {
 		HandleServer hs = new HandleServer(ec2, newInstanceId);
 		hs.start();
 		instanceList.put(newInstanceId, hs);
-        serverLoad.put("0;"+newInstanceId, hs);
+        serverLoad.put(hs,0.0);
 	}
 
 	public static void closeInstance(String id) {
@@ -198,7 +200,7 @@ public class LoadBalancer {
 			if(hs != null) {
 				if(hs.isAlive() && hs.handling.size() < MAX_EQUAL_REQUESTS_PER_SERVER) {
 					System.out.println("Sending request to cache");
-					hs.sendRequest(request,calculateHeuristic(request.getRequestURI().getQuery()));
+					hs.sendRequest(request,getMetric(request.getRequestURI().getQuery()));
 					return;
 				} else {
 					requestsCache.remove(requestHash);
@@ -207,10 +209,13 @@ public class LoadBalancer {
 
 			// choose instance
 			Double metric = getMetric(request.getRequestURI().getQuery());
-            ArrayList<String> loads = new  ArrayList<String>();
-            loads.addAll(serverLoad.keySet());
-            Collections.sort(loads, new LoadComparator());
-            hs = serverLoad.get(loads.get(0));
+            Double min = Double.MAX_VALUE;
+            for (Map.Entry<HandleServer, Double> entry: serverLoad.entrySet()) {
+            	if(entry.getValue() < min) {
+            		min = entry.getValue();
+            	    hs = entry.getKey();
+            	}            	
+            }
             System.out.println("Sending request");
             hs.sendRequest(request, metric);
 
@@ -343,18 +348,4 @@ public class LoadBalancer {
             }
         }
     };
-
-    private static class LoadComparator implements Comparator<String> {
-        public LoadComparator() {
-        }
-        @Override
-        public int compare(String load1, String load2) {
-        	System.out.println("In compare");
-            if (Integer.parseInt(load2.split(";")[0]) < Integer.parseInt(load1.split(";")[0]))
-                return -1;
-            else
-                return 1;
-        }
-		
-    }
 }

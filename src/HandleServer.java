@@ -59,7 +59,7 @@ class HandleServer implements Runnable {
 						URL url = new URL("http://" + instanceIp + ":8000/ping");
 						HttpURLConnection con = (HttpURLConnection) url.openConnection();
 						con.setRequestMethod("GET");
-						if (con.getRequestCode() == 200){
+						if (con.getResponseCode() == 200){
 							System.out.println("Sucessfull ping for " + instanceIp);
 							status = 2;
 						} else {
@@ -101,7 +101,7 @@ class HandleServer implements Runnable {
 		}
 		LoadBalancer.instanceList.remove(instanceId);
 		LoadBalancer.closeInstance(instanceId);
-		isAlive = false;
+		status = 3;
 	}
 
 	public void start() {
@@ -115,10 +115,7 @@ class HandleServer implements Runnable {
 		try {
 			handling.add(request);
 
-			LoadBalancer.serverLoad.remove(load);
-			Double newload = Integer.parseInt(load.split(";")[0]) + metric;
-			load = newload + load.split(";")[1];
-			LoadBalancer.serverLoad.put(load,(HandleServer)this);
+			LoadBalancer.serverLoad.put((HandleServer)this, LoadBalancer.serverLoad.get((HandleServer)this) + metric);
 
 			System.out.println("Received request");
 			/*
@@ -164,10 +161,7 @@ class HandleServer implements Runnable {
 				handled.add(request);
 			}
 
-			LoadBalancer.serverLoad.remove(load);
-			newload = Integer.parseInt(load.split(";")[0]) - metric;
-			load = newload + load.split(";")[1];
-			LoadBalancer.serverLoad.put(load,(HandleServer)this);
+			LoadBalancer.serverLoad.put((HandleServer)this, LoadBalancer.serverLoad.get((HandleServer)this) - metric);
 
 		} catch (ConnectException e) {
 			System.out.println("Retrying to send request");
