@@ -48,7 +48,7 @@ class HandleServer implements Runnable {
 					for (Instance i : instances) {
 						if (i.getInstanceId().equals(instanceId)) {
 							instanceIp = i.getPublicIpAddress();
-							if (instanceIp == null || instanceIp.equals(""))
+							if (instanceIp != null && !instanceIp.equals(""))
 								status = 1;
 							break;
 						}
@@ -163,7 +163,7 @@ class HandleServer implements Runnable {
 
 			LoadBalancer.serverLoad.put((HandleServer)this, LoadBalancer.serverLoad.get((HandleServer)this) - metric);
 
-		} catch (ConnectException e) {
+		} catch (IOException e) {
 			System.out.println("Retrying to send request");
 			handling.remove(request);
 			try {
