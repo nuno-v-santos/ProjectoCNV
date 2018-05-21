@@ -171,6 +171,8 @@ public class LoadBalancer {
 		HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
 		server.createContext("/mzrun.html", new RedirectHandler());
 		server.createContext("/ping", new PingHandler());
+		int poolSize = Runtime.getRuntime().availableProcessors() + 1;
+        server.setExecutor(Executors.newFixedThreadPool(poolSize));
 		server.start();
 
 		newInstance();
@@ -234,24 +236,26 @@ public class LoadBalancer {
     	String[] args = query.split("&");
     	int x0=0,y0=0,x1=0,y1=0,v=0,m=0;
     	for (String arg : args){
-		String[] attributes = arg.split("=");
-		if (attributes[0].equals("x0")){
-			x0 = Integer.parseInt(attributes[1]);
-		} else if (attributes[0].equals("y0")){
-			y0 = Integer.parseInt(attributes[1]);
-		} else if (attributes[0].equals("x1")){
-			x1 = Integer.parseInt(attributes[1]);
-		} else if (attributes[0].equals("y1")){
-			y1 = Integer.parseInt(attributes[1]);
-		} else if (attributes[0].equals("v")){
-			v = Integer.parseInt(attributes[1]);
-		} else if (attributes[0].equals("m")){
-			m = Integer.parseInt(attributes[1].substring(4, attributes[1].length()-5));
+			String[] attributes = arg.split("=");
+			if (attributes[0].equals("x0")){
+				x0 = Integer.parseInt(attributes[1]);
+			} else if (attributes[0].equals("y0")){
+				y0 = Integer.parseInt(attributes[1]);
+			} else if (attributes[0].equals("x1")){
+				x1 = Integer.parseInt(attributes[1]);
+			} else if (attributes[0].equals("y1")){
+				y1 = Integer.parseInt(attributes[1]);
+			} else if (attributes[0].equals("v")){
+				v = Integer.parseInt(attributes[1]);
+			} else if (attributes[0].equals("m")){
+				m = Integer.parseInt(attributes[1].substring(4, attributes[1].length()-5));
+			}
 		}
-	}
-        return Math.sqrt(Math.pow((x1-x0),2) + Math.pow((y1-y0),2)) + 500/v + 10*m;
 
-}
+		System.out.println(m);
+        System.out.println("Heuristic is -> " + Math.sqrt(Math.pow((x1-x0),2) + Math.pow((y1-y0),2) * 1/v * m));
+		return Math.sqrt(Math.pow((x1-x0),2) + Math.pow((y1-y0),2) * 1/v * m);
+	}
 
     public static Double getMetric(String query) {
         //Check if table empty
