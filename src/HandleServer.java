@@ -19,6 +19,7 @@ import com.amazonaws.services.ec2.model.Reservation;
 class HandleServer implements Runnable {
 	private static final int MAX_RETRIES = 3;
 	private static final int TIME_BETWEEN_PINGS = 10000;
+	private static final int TIME_BETWEEN_RETRIES = 3333;
 	private static final int CACHE_SIZE = 2;
 	//private static final double THRESHOLD_VALUE = 18788059;  //TODO: choose value here
 	private static final double THRESHOLD_VALUE = 2;
@@ -57,26 +58,48 @@ class HandleServer implements Runnable {
 					try {
 						URL url = new URL("http://" + instanceIp + ":8000/ping");
 						HttpURLConnection con = (HttpURLConnection) url.openConnection();
+						con.setConnectTimeout(TIME_BETWEEN_RETRIES);
 						con.setRequestMethod("GET");
-						if (con.getResponseCode() == 200){
+						System.out.println(con.getResponseCode());
+						if (con.getResponseCode() == HttpURLConnection.HTTP_OK){
 							status = 2;
+							retries = 0;
+							try {
+								Thread.sleep(TIME_BETWEEN_PINGS);
+							} catch (InterruptedException e) {
+								e.printStackTrace();
+							}
+						} else if (status == 2){
+							System.out.println("New s");
+							if(retries++ > MAX_RETRIES && status == 2) {
+							status = 3;
+							}
+							try {
+								Thread.sleep(TIME_BETWEEN_RETRIES);
+							} catch (InterruptedException e) {
+								e.printStackTrace();
+							}
 						}
 					} catch (IOException e) {
-						if(retries++ > MAX_RETRIES && status == 2) {
+						System.out.println("Except");
+						if(++retries > MAX_RETRIES && status == 2) {
 							status = 3;
 						}
+						try {
+								Thread.sleep(TIME_BETWEEN_RETRIES);
+							} catch (InterruptedException ie) {
+								ie.printStackTrace();
+							}
 					}
 				}
 
-				try {
-					Thread.sleep(TIME_BETWEEN_PINGS);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
+
 			}
 
 			// Instance died
+			System.out.println("Ping kill" + instanceId);
 			kill();
+			this.interrupt();
 		}
 	};
 
@@ -90,12 +113,16 @@ class HandleServer implements Runnable {
 	}
 	
 	public void kill() {
-		for (HttpExchange r : handling){
-			// LoadBalancer.RedirectHandler.handle(r); how do i do this?
-		}
-		LoadBalancer.instanceList.remove(instanceId);
-		LoadBalancer.closeInstance(instanceId);
 		status = 3;
+		LoadBalancer.instanceList.remove(instanceId);
+		LoadBalancer.serverLoad.remove((HandleServer)this);
+		LoadBalancer.closeInstance(instanceId);
+		for (HttpExchange r : handling){
+			System.out.println("Sending unserved" + r);
+			LoadBalancer.send(r);
+		}
+		Thread.currentThread().interrupt();
+		
 	}
 
 	public void start() {
@@ -161,6 +188,8 @@ class HandleServer implements Runnable {
 		} catch (IOException e) {
 			System.out.println("Retrying to send request");
 			handling.remove(request);
+			load -= metric;
+			LoadBalancer.serverLoad.put((HandleServer)this, load);
 			try {
 				Thread.sleep(5000);
 			} catch (InterruptedException ie) {

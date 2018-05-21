@@ -8,6 +8,7 @@ import java.util.concurrent.Executors;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.HashMap;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -45,98 +46,91 @@ import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 
 public class LoadBalancer {
-	private static final String IMAGE_ID = "ami-6fd64e10";
-	private static final String AWS_KEY = "CNV-lab-AWS";
-	private static final String AWS_SECURITY_GROUP = "CNV-ssh+http";
-	private static final String TABLE_NAME = "Metrics";
+    private static final String IMAGE_ID = "ami-0a63b0cca9999ce90";
+    private static final String AWS_KEY = "CNV-lab-AWS";
+    private static final String AWS_SECURITY_GROUP = "CNV-ssh+http";
+  	private static final String TABLE_NAME = "Metrics";
 	private static final int MAX_EQUAL_REQUESTS_PER_SERVER = 10;
 	private static final int CACHE_SIZE = 1024;
 	private static final int POOL_SIZE = 30;
-	private static final int AUTO_SCALER_INTERVAL = 20000;
+	private static final int AUTO_SCALER_DECREASE_INTERVAL = 30000;
+	private static final int AUTO_SCALER_INCREASE_INTERVAL = 5000;
 
 	public static ConcurrentHashMap<String, HandleServer> instanceList = new ConcurrentHashMap<>();
 	public static ConcurrentHashMap<Integer, HandleServer> requestsCache = new  ConcurrentHashMap<>();
 	public static ConcurrentHashMap<HandleServer, Double> serverLoad = new  ConcurrentHashMap<>();
-
 	private static AmazonEC2 ec2;
 	private static AmazonDynamoDB dynamoDB;
 
-	private static void init() throws Exception {
-		AWSCredentials credentials = null;
-		try {
-			credentials = new ProfileCredentialsProvider().getCredentials();
-		} catch (Exception e) {
-			throw new AmazonClientException("Cannot load the credentials from the credential profiles file. "
-					+ "Please make sure that your credentials file is at the correct "
-					+ "location (~/.aws/credentials), and is in valid format.", e);
-		}
-		ec2 = AmazonEC2ClientBuilder.standard().withRegion("us-east-1a")
-				.withCredentials(new AWSStaticCredentialsProvider(credentials)).build();
+	public static void main(String[] args) throws Exception {
 
-		try {
-			DescribeAvailabilityZonesResult availabilityZonesResult = ec2.describeAvailabilityZones();
-			System.out.println("You have access to " + availabilityZonesResult.getAvailabilityZones().size()
-					+ " Availability Zones.");
+		System.out.println("===========================================");
+		System.out.println("Welcome to the AWS Java SDK!");
+		System.out.println("===========================================");
 
-			DescribeInstancesResult describeInstancesRequest = ec2.describeInstances();
-			List<Reservation> reservations = describeInstancesRequest.getReservations();
-			Set<Instance> instances = new HashSet<Instance>();
+		initDB();
 
-			for (Reservation reservation : reservations) {
-				instances.addAll(reservation.getInstances());
-			}
+		HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
+		server.createContext("/mzrun.html", new RedirectHandler());
+		server.createContext("/ping", new PingHandler());
+		server.setExecutor(Executors.newFixedThreadPool(POOL_SIZE));
+		server.start();
 
-			System.out.println("You have " + instances.size() + " Amazon EC2 instance(s) running.");
+		autoscaler_increase.start();
+		autoscaler_decrease.start();
 
-		} catch (AmazonServiceException ase) {
-			System.out.println("Caught Exception: " + ase.getMessage());
-			System.out.println("Reponse Status Code: " + ase.getStatusCode());
-			System.out.println("Error Code: " + ase.getErrorCode());
-			System.out.println("Request ID: " + ase.getRequestId());
-		}
-
-		// init database
-
-		dynamoDB = AmazonDynamoDBClientBuilder
-				.standard()
-				.withCredentials(new AWSStaticCredentialsProvider(credentials))
-				.withRegion("us-east-1")
-				.build();
-
-		try {
-			// Create a table with a primary hash key named 'name', which holds a string
-			CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(TABLE_NAME)
-					.withKeySchema(new KeySchemaElement().withAttributeName("Heuristic").withKeyType(KeyType.HASH))
-					.withAttributeDefinitions(
-							new AttributeDefinition().withAttributeName("Heuristic").withAttributeType(ScalarAttributeType.N))
-					.withProvisionedThroughput(
-							new ProvisionedThroughput().withReadCapacityUnits(1L).withWriteCapacityUnits(1L));
-
-			// Create table if it does not exist yet
-			TableUtils.createTableIfNotExists(dynamoDB, createTableRequest);
-			// wait for the table to move into ACTIVE state
-			TableUtils.waitUntilActive(dynamoDB, TABLE_NAME);
-
-			// Describe our new table
-			DescribeTableRequest describeTableRequest = new DescribeTableRequest().withTableName(TABLE_NAME);
-			TableDescription tableDescription = dynamoDB.describeTable(describeTableRequest).getTable();
-			System.out.println("Table Description: " + tableDescription);
-		} catch (AmazonServiceException ase) {
-			System.out.println("Caught an AmazonServiceException, which means your request made it "
-					+ "to AWS, but was rejected with an error response for some reason.");
-			System.out.println("Error Message:    " + ase.getMessage());
-			System.out.println("HTTP Status Code: " + ase.getStatusCode());
-			System.out.println("AWS Error Code:   " + ase.getErrorCode());
-			System.out.println("Error Type:       " + ase.getErrorType());
-			System.out.println("Request ID:       " + ase.getRequestId());
-		} catch (AmazonClientException ace) {
-			System.out.println("Caught an AmazonClientException, which means the client encountered "
-					+ "a serious internal problem while trying to communicate with AWS, "
-					+ "such as not being able to access the network.");
-			System.out.println("Error Message: " + ace.getMessage());
-		}
-
+		System.out.println("Receiving Requests...");
 	}
+
+		public static Thread autoscaler_increase = new Thread(){
+		public void run(){
+			while(true){
+
+				//auto-scaler increase rules
+				int lowLoadInstances = 0;
+				for(String i : instanceList.keySet()) {
+					HandleServer hs = instanceList.get(i);
+					if (hs.readyForRequest())
+						lowLoadInstances++;
+				}
+				if (lowLoadInstances == 0){
+					newInstance();
+				}
+
+				try{
+					Thread.sleep(AUTO_SCALER_INCREASE_INTERVAL);
+				} catch (InterruptedException e){
+					e.printStackTrace();
+				}
+			}
+		}
+	};
+
+	public static Thread autoscaler_decrease = new Thread(){
+		public void run(){
+			while(true){
+
+				//auto-scaler decrease rules
+				int toleratedFreeInstances = 1;
+				for(String i : instanceList.keySet()) {
+					HandleServer hs = instanceList.get(i);
+					if (hs.isFree()){ //if instance is not busy
+						if (toleratedFreeInstances > 0){
+							toleratedFreeInstances--;
+						} else {
+							hs.kill();
+						}
+					}
+				}
+
+				try{
+					Thread.sleep(AUTO_SCALER_DECREASE_INTERVAL);
+				} catch (InterruptedException e){
+					e.printStackTrace();
+				}
+			}
+		}
+	};
 
 	public static void newInstance() {
 		System.out.println("Starting a new instance.");
@@ -159,25 +153,6 @@ public class LoadBalancer {
 		ec2.terminateInstances(termInstanceReq);
 	}
 
-	public static void main(String[] args) throws Exception {
-
-		System.out.println("===========================================");
-		System.out.println("Welcome to the AWS Java SDK!");
-		System.out.println("===========================================");
-
-		init();
-
-		HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
-		server.createContext("/mzrun.html", new RedirectHandler());
-		server.createContext("/ping", new PingHandler());
-			server.setExecutor(Executors.newFixedThreadPool(POOL_SIZE));
-		server.start();
-
-		autoscaler.start();
-
-		System.out.println("Receiving Requests...");
-	}
-
 	static class PingHandler implements HttpHandler {
 		@Override
 		public void handle(HttpExchange t) throws IOException {
@@ -190,49 +165,53 @@ public class LoadBalancer {
 	}
 
 	public static class RedirectHandler implements HttpHandler {
-
 		@Override
 		public void handle(HttpExchange request) throws IOException {
-			// verify if it is in local cache
-			int requestHash = request.getRequestURI().getQuery().hashCode();
-			HandleServer hs = requestsCache.get(requestHash);
-			if(hs != null && hs.handling.size() < MAX_EQUAL_REQUESTS_PER_SERVER) {
-				if(hs.isAlive()) {
-					System.out.println("Sending request to cache");
-					hs.sendRequest(request,getMetric(request.getRequestURI().getQuery()));
-					return;
-				} else {
-					System.out.println("The instance died - removing from cache: " + requestHash);
-					requestsCache.remove(requestHash);
-				}
+			send(request);
+		}
+	}
+	public static void send(HttpExchange request) {
+		if (instanceList.isEmpty()) {
+			newInstance();
+		}
+		// verify if it is in local cache
+		int requestHash = request.getRequestURI().getQuery().hashCode();
+		HandleServer hs = requestsCache.get(requestHash);
+		if(hs != null && hs.handling.size() < MAX_EQUAL_REQUESTS_PER_SERVER) {
+			if(hs.isAlive()) {
+				System.out.println("Sending request to cache");
+				hs.sendRequest(request,getMetric(request.getRequestURI().getQuery()));
+				return;
+			} else {
+				System.out.println("The instance died - removing from cache: " + requestHash);
+				requestsCache.remove(requestHash);
 			}
+		}
 
-			// choose instance
-			Double metric = getMetric(request.getRequestURI().getQuery());
-			Double min = Double.MAX_VALUE;
-			for (Map.Entry<HandleServer, Double> entry: serverLoad.entrySet()) {
-				if(entry.getValue() < min) {
-					min = entry.getValue();
-					hs = entry.getKey();
-				}            	
-			}
-			System.out.println("Sending request");
-			hs.sendRequest(request, metric);
+		// choose instance
+		Double metric = getMetric(request.getRequestURI().getQuery());
+		Double min = Double.MAX_VALUE;
+		for (Map.Entry<HandleServer, Double> entry: serverLoad.entrySet()) {
+			if(entry.getValue() < min) {
+				min = entry.getValue();
+				hs = entry.getKey();
+			}            	
+		}
+		System.out.println("Sending request");
+		hs.sendRequest(request, metric);
 
-			System.out.println("Adding to cache. Cache size = " + requestsCache.size());
-			requestsCache.put(requestHash, hs);
-			for(int hash : requestsCache.keySet()) {
-				System.out.println("\t" + hash);
-			}
-			System.out.println("Added to cache. Cache size = " + requestsCache.size());
-			if(requestsCache.size() > CACHE_SIZE) {
-				requestsCache.remove(requestsCache.keys().nextElement());
-			}
+		System.out.println("Adding to cache. Cache size = " + requestsCache.size());
+		requestsCache.put(requestHash, hs);
+		for(int hash : requestsCache.keySet()) {
+			System.out.println("\t" + hash);
+		}
+		System.out.println("Added to cache. Cache size = " + requestsCache.size());
+		if(requestsCache.size() > CACHE_SIZE) {
+			requestsCache.remove(requestsCache.keys().nextElement());
 		}
 	}
 
     private static double calculateHeuristic(String query) {
-	System.out.println("stuff");
     	String[] args = query.split("&");
     	int x0=0, y0=0, x1=0, y1=0, v=0, m=0;
     	double heuristic;
@@ -351,40 +330,80 @@ public class LoadBalancer {
 		return higher;
 	}
 
-	public static Thread autoscaler = new Thread(){
-		public void run(){
-			while(true){
-
-				//auto-scaler decrease rules
-				int toleratedFreeInstances = 1;
-				for(String i : instanceList.keySet()) {
-					HandleServer hs = instanceList.get(i);
-					if (hs.isFree()){ //if instance is not busy
-						if (toleratedFreeInstances > 0){
-							toleratedFreeInstances--;
-						} else {
-							hs.kill();
-						}
-					}
-				}
-
-				//auto-scaler increase rules
-				int lowLoadInstances = 0;
-				for(String i : instanceList.keySet()) {
-					HandleServer hs = instanceList.get(i);
-					if (hs.readyForRequest())
-						lowLoadInstances++;
-				}
-				if (lowLoadInstances == 0){
-					newInstance();
-				}
-
-				try{
-					Thread.sleep(AUTO_SCALER_INTERVAL);
-				} catch (InterruptedException e){
-					e.printStackTrace();
-				}
-			}
+	private static void initDB() throws Exception {
+		AWSCredentials credentials = null;
+		try {
+			credentials = new ProfileCredentialsProvider().getCredentials();
+		} catch (Exception e) {
+			throw new AmazonClientException("Cannot load the credentials from the credential profiles file. "
+					+ "Please make sure that your credentials file is at the correct "
+					+ "location (~/.aws/credentials), and is in valid format.", e);
 		}
-	};
+		ec2 = AmazonEC2ClientBuilder.standard().withRegion("us-east-1a")
+				.withCredentials(new AWSStaticCredentialsProvider(credentials)).build();
+
+		try {
+			DescribeAvailabilityZonesResult availabilityZonesResult = ec2.describeAvailabilityZones();
+			System.out.println("You have access to " + availabilityZonesResult.getAvailabilityZones().size()
+					+ " Availability Zones.");
+
+			DescribeInstancesResult describeInstancesRequest = ec2.describeInstances();
+			List<Reservation> reservations = describeInstancesRequest.getReservations();
+			Set<Instance> instances = new HashSet<Instance>();
+
+			for (Reservation reservation : reservations) {
+				instances.addAll(reservation.getInstances());
+			}
+
+			System.out.println("You have " + instances.size() + " Amazon EC2 instance(s) running.");
+
+		} catch (AmazonServiceException ase) {
+			System.out.println("Caught Exception: " + ase.getMessage());
+			System.out.println("Reponse Status Code: " + ase.getStatusCode());
+			System.out.println("Error Code: " + ase.getErrorCode());
+			System.out.println("Request ID: " + ase.getRequestId());
+		}
+
+		// init database
+
+		dynamoDB = AmazonDynamoDBClientBuilder
+				.standard()
+				.withCredentials(new AWSStaticCredentialsProvider(credentials))
+				.withRegion("us-east-1")
+				.build();
+
+		try {
+			// Create a table with a primary hash key named 'name', which holds a string
+			CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(TABLE_NAME)
+					.withKeySchema(new KeySchemaElement().withAttributeName("Heuristic").withKeyType(KeyType.HASH))
+					.withAttributeDefinitions(
+							new AttributeDefinition().withAttributeName("Heuristic").withAttributeType(ScalarAttributeType.N))
+					.withProvisionedThroughput(
+							new ProvisionedThroughput().withReadCapacityUnits(1L).withWriteCapacityUnits(1L));
+
+			// Create table if it does not exist yet
+			TableUtils.createTableIfNotExists(dynamoDB, createTableRequest);
+			// wait for the table to move into ACTIVE state
+			TableUtils.waitUntilActive(dynamoDB, TABLE_NAME);
+
+			// Describe our new table
+			DescribeTableRequest describeTableRequest = new DescribeTableRequest().withTableName(TABLE_NAME);
+			TableDescription tableDescription = dynamoDB.describeTable(describeTableRequest).getTable();
+			System.out.println("Table Description: " + tableDescription);
+		} catch (AmazonServiceException ase) {
+			System.out.println("Caught an AmazonServiceException, which means your request made it "
+					+ "to AWS, but was rejected with an error response for some reason.");
+			System.out.println("Error Message:    " + ase.getMessage());
+			System.out.println("HTTP Status Code: " + ase.getStatusCode());
+			System.out.println("AWS Error Code:   " + ase.getErrorCode());
+			System.out.println("Error Type:       " + ase.getErrorType());
+			System.out.println("Request ID:       " + ase.getRequestId());
+		} catch (AmazonClientException ace) {
+			System.out.println("Caught an AmazonClientException, which means the client encountered "
+					+ "a serious internal problem while trying to communicate with AWS, "
+					+ "such as not being able to access the network.");
+			System.out.println("Error Message: " + ace.getMessage());
+		}
+
+	}
 }
