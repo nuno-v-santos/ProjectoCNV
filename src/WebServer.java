@@ -75,7 +75,7 @@ public class WebServer {
         int v = Integer.parseInt(args[4]);
         //int s = Integer.parseInt(args[5]);
         int m = Integer.parseInt(args[6].substring(15, args[6].length()-5));
-		return Math.sqrt(Math.pow((x1-x0),2) + Math.pow((y1-y0),2) + 500/v + 10 * m);
+		return Math.sqrt(Math.pow((x1-x0),2) + Math.pow((y1-y0),2)) + 500/v + 10 * m;
 	}
 
 	private static void initializeDataBase() throws Exception {

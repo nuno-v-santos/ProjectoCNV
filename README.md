@@ -40,8 +40,10 @@ rm aws-java-sdk.zip
 
 rm outputs/*
 find . -type f -name '*.class' -delete
+sudo /etc/rc.local start
 
-export CLASSPATH="/home/ec2-user/ProjectoCNV/src/MazeRunner/src:/home/ec2-user/ProjectoCNV/src/BIT:/home/ec2-user/ProjectoCNV/src/BIT/samples:/home/ec2-user/ProjectoCNV/aws-java-sdk-1.11.332/lib/aws-java-sdk-1.11.332.jar:/home/ec2-user/ProjectoCNV/aws-java-sdk-1.11.332/third-party/lib/*:./"
+
+export CLASSPATH="/home/ec2-user/ProjectoCNV/src/MazeRunner/src:/home/ec2-user/ProjectoCNV/src/BIT:/home/ec2-user/ProjectoCNV/src/BIT/samples:/home/ec2-user/ProjectoCNV/aws-java-sdk-1.11.333/lib/aws-java-sdk-1.11.333.jar:/home/ec2-user/ProjectoCNV/aws-java-sdk-1.11.333/third-party/lib/*:./"
 alias compileAll='find . -name "*.java" -print | xargs javac'
 export _JAVA_OPTIONS="-XX:-UseSplitVerifier "$_JAVA_OPTIONS
 

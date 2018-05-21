@@ -47,7 +47,7 @@ import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 
 public class LoadBalancer {
-    private static final String IMAGE_ID = "ami-e860fe97";
+    private static final String IMAGE_ID = "ami-b7039dc8";
     private static final String AWS_KEY = "CNV";
     private static final String AWS_SECURITY_GROUP = "CNV-ssh-http";
     private static final int MAX_EQUAL_REQUESTS_PER_SERVER = 10;
@@ -109,7 +109,7 @@ public class LoadBalancer {
 			CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(TABLE_NAME)
 					.withKeySchema(new KeySchemaElement().withAttributeName("Heuristic").withKeyType(KeyType.HASH))
 					.withAttributeDefinitions(
-							new AttributeDefinition().withAttributeName("Heuristic").withAttributeType(ScalarAttributeType.S))
+							new AttributeDefinition().withAttributeName("Heuristic").withAttributeType(ScalarAttributeType.N))
 					.withProvisionedThroughput(
 							new ProvisionedThroughput().withReadCapacityUnits(1L).withWriteCapacityUnits(1L));
 
@@ -232,16 +232,26 @@ public class LoadBalancer {
     private static double calculateHeuristic(String query) {
     	System.out.println("Calculating heuristic of query -> " + query);
     	String[] args = query.split("&");
-        int x0 = Integer.parseInt(args[0]);
-        int y0 = Integer.parseInt(args[1]);
-        int x1 = Integer.parseInt(args[2]);
-        int y1 = Integer.parseInt(args[3]);
-        int v = Integer.parseInt(args[4]);
-        //int s = Integer.parseInt(args[5]);
-        int m = Integer.parseInt(args[6].substring(15, args[6].length()-5));
-        System.out.println("Heuristic is -> " + Math.sqrt((x1-x0)^2 + (y1-y0)^2) * 1/v * m);
-		return Math.sqrt(Math.pow((x1-x0),2) + Math.pow((y1-y0),2) + 500/$
-        }
+    	int x0=0,y0=0,x1=0,y1=0,v=0,m=0;
+    	for (String arg : args){
+		String[] attributes = arg.split("=");
+		if (attributes[0].equals("x0")){
+			x0 = Integer.parseInt(attributes[1]);
+		} else if (attributes[0].equals("y0")){
+			y0 = Integer.parseInt(attributes[1]);
+		} else if (attributes[0].equals("x1")){
+			x1 = Integer.parseInt(attributes[1]);
+		} else if (attributes[0].equals("y1")){
+			y1 = Integer.parseInt(attributes[1]);
+		} else if (attributes[0].equals("v")){
+			v = Integer.parseInt(attributes[1]);
+		} else if (attributes[0].equals("m")){
+			m = Integer.parseInt(attributes[1].substring(4, attributes[1].length()-5));
+		}
+	}
+        return Math.sqrt(Math.pow((x1-x0),2) + Math.pow((y1-y0),2)) + 500/v + 10*m;
+
+}
 
     public static Double getMetric(String query) {
         //Check if table empty
@@ -289,7 +299,7 @@ public class LoadBalancer {
         System.out.println("Results GT -> " + scanResultGT);
 
         double lowerHeuristic = .0, lowerMetric = .0, higherHeuristic = .0, higherMetric = .0;
-        if (scanResultGT != null && scanResultLT != null) {
+        if (scanResultGT.getCount() != 0 && scanResultLT.getCount() != 0) {
             Map<String, AttributeValue> lower = scanResultLT.getItems().get(0);
             for (Map.Entry<String, AttributeValue> pair : lower.entrySet()) {
                 lowerHeuristic = Double.parseDouble(pair.getKey());
@@ -302,10 +312,10 @@ public class LoadBalancer {
             }
             // weighted average formula
             return lowerMetric + (higherMetric - lowerMetric) * ((heuristic - lowerHeuristic) / (higherHeuristic - lowerHeuristic));
-        } else if (scanResultLT != null) {
+        } else if (scanResultLT.getCount() != 0) {
             AttributeValue lower = (AttributeValue) scanResultLT.getItems().get(0).values().toArray()[0];
             return Double.parseDouble(lower.getN());
-        } else if (scanResultGT != null){
+        } else if (scanResultGT.getCount() != 0){
             AttributeValue higher = (AttributeValue) scanResultGT.getItems().get(0).values().toArray()[0];
         	return Double.parseDouble(higher.getN());
         }
