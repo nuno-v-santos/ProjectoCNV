@@ -12,6 +12,8 @@ export CLASSPATH="/home/ec2-user/ProjectoCNV/src/MazeRunner/src:/home/ec2-user/P
 export _JAVA_OPTIONS="-XX:-UseSplitVerifier "$_JAVA_OPTIONS
 cp /etc/.aws /root/.aws
 cd /home/ec2-user/ProjectoCNV/src
+rm -r outputs/
+mkdir outputs
 compileAll
 java OurTool MazeRunner/src/pt/ulisboa/tecnico/meic/cnv/mazerunner/maze
 java WebServer
