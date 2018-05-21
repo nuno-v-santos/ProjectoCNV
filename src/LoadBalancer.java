@@ -45,13 +45,14 @@ import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 
 public class LoadBalancer {
-	private static final String IMAGE_ID = "ami-5230a92d";
+	private static final String IMAGE_ID = "ami-6fd64e10";
 	private static final String AWS_KEY = "CNV-lab-AWS";
 	private static final String AWS_SECURITY_GROUP = "CNV-ssh+http";
 	private static final String TABLE_NAME = "Metrics";
 	private static final int MAX_EQUAL_REQUESTS_PER_SERVER = 10;
 	private static final int CACHE_SIZE = 1024;
 	private static final int POOL_SIZE = 30;
+	private static final int AUTO_SCALER_INTERVAL = 20000;
 
 	public static ConcurrentHashMap<String, HandleServer> instanceList = new ConcurrentHashMap<>();
 	public static ConcurrentHashMap<Integer, HandleServer> requestsCache = new  ConcurrentHashMap<>();
@@ -230,11 +231,12 @@ public class LoadBalancer {
 		}
 	}
 
-	private static double calculateHeuristic(String query) {
-		String[] args = query.split("&");
-		int x0=0, y0=0, x1=0, y1=0, v=0, m=0;
-		double heuristic;
-		for (String arg : args){
+    private static double calculateHeuristic(String query) {
+	System.out.println("stuff");
+    	String[] args = query.split("&");
+    	int x0=0, y0=0, x1=0, y1=0, v=0, m=0;
+    	double heuristic;
+    	for (String arg : args){
 			String[] attributes = arg.split("=");
 			if (attributes[0].equals("x0")){
 				x0 = Integer.parseInt(attributes[1]);
@@ -315,7 +317,7 @@ public class LoadBalancer {
 			double higherMetric = Double.parseDouble(higher.get("Metric").getN());
 			double higherHeuristic = Double.parseDouble(higher.get("Heuristic").getN());
 			System.out.println("Higher metric: " + Double.parseDouble(higher.get("Metric").getN()) + " Lower metric: " + Double.parseDouble(lower.get("Metric").getN()));
-			System.out.println("Result: " + lowerMetric + (higherMetric - lowerMetric) * ((heuristic - lowerHeuristic) / (higherHeuristic - lowerHeuristic)));
+			System.out.println("Result: " + (lowerMetric + (higherMetric - lowerMetric) * ((heuristic - lowerHeuristic) / (higherHeuristic - lowerHeuristic))));
 			return lowerMetric + (higherMetric - lowerMetric) * ((heuristic - lowerHeuristic) / (higherHeuristic - lowerHeuristic));
 		}
 	}
@@ -378,7 +380,7 @@ public class LoadBalancer {
 				}
 
 				try{
-					Thread.sleep(3000);
+					Thread.sleep(AUTO_SCALER_INTERVAL);
 				} catch (InterruptedException e){
 					e.printStackTrace();
 				}
