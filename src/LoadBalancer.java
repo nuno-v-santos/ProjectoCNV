@@ -1,4 +1,5 @@
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -295,32 +296,57 @@ public class LoadBalancer {
 		scanFilter.put("Heuristic", condition);
 		scanRequest = new ScanRequest(TABLE_NAME).withScanFilter(scanFilter);
 		ScanResult scanResultLT = dynamoDB.scan(scanRequest);
-
-		System.out.println("Results LT -> " + scanResultLT);
-		System.out.println("Results GT -> " + scanResultGT);
-
-		double lowerHeuristic = .0, lowerMetric = .0, higherHeuristic = .0, higherMetric = .0;
-		if (scanResultGT.getCount() != 0 && scanResultLT.getCount() != 0) {
-			Map<String, AttributeValue> lower = scanResultLT.getItems().get(0);
-			for (Map.Entry<String, AttributeValue> pair : lower.entrySet()) {
-				lowerHeuristic = Double.parseDouble(pair.getKey());
-				lowerMetric = Double.parseDouble(pair.getValue().getN());
-			}
-			Map<String, AttributeValue> higher =  scanResultGT.getItems().get(0);
-			for (Map.Entry<String, AttributeValue> pair : higher.entrySet()) {
-				higherHeuristic = Double.parseDouble(pair.getKey());
-				higherMetric = Double.parseDouble(pair.getValue().getN());
-			}
-			// weighted average formula
+		
+		if (scanResultLT.getCount() == 0) { // if there are no lower values, we will use the lowest of the higher values
+			Map<String, AttributeValue> lower = getLower(scanResultGT.getItems());
+			System.out.println("Getting a higher metric: " + Double.parseDouble(lower.get("Metric").getN()));
+			return Double.parseDouble(lower.get("Metric").getN());
+			
+		} else if (scanResultGT.getCount() == 0){ // if there are no higher values, we will use the highest of the lower values
+			Map<String, AttributeValue> higher = getHigher(scanResultLT.getItems());
+			System.out.println("Getting a lowe metric: " + Double.parseDouble(higher.get("Metric").getN()));
+			return Double.parseDouble(higher.get("Metric").getN());
+		
+		} else { // else we will use the weighted average between the highest of the lower values and the lowest of the higher values
+			Map<String, AttributeValue> lower = getHigher(scanResultLT.getItems());
+			Map<String, AttributeValue> higher = getLower(scanResultGT.getItems());
+			double lowerMetric = Double.parseDouble(lower.get("Metric").getN());
+			double lowerHeuristic = Double.parseDouble(lower.get("Heuristic").getN());
+			double higherMetric = Double.parseDouble(higher.get("Metric").getN());
+			double higherHeuristic = Double.parseDouble(higher.get("Heuristic").getN());
+			System.out.println("Higher metric: " + Double.parseDouble(higher.get("Metric").getN()) + " Lower metric: " + Double.parseDouble(lower.get("Metric").getN()));
+			System.out.println("Result: " + lowerMetric + (higherMetric - lowerMetric) * ((heuristic - lowerHeuristic) / (higherHeuristic - lowerHeuristic)));
 			return lowerMetric + (higherMetric - lowerMetric) * ((heuristic - lowerHeuristic) / (higherHeuristic - lowerHeuristic));
-		} else if (scanResultLT.getCount() != 0) {
-			AttributeValue lower = (AttributeValue) scanResultLT.getItems().get(0).values().toArray()[0];
-			return Double.parseDouble(lower.getN());
-		} else if (scanResultGT.getCount() != 0){
-			AttributeValue higher = (AttributeValue) scanResultGT.getItems().get(0).values().toArray()[0];
-			return Double.parseDouble(higher.getN());
 		}
-		return .0;
+	}
+		
+/*{Items: [{Heuristic={N: 513.0710678118655,}, Metric={N: 18788059,}},
+        {Heuristic={N: 1131.016805536025,}, Metric={N: 1134648994,}},
+        {Heuristic={N: 512.4031242374328,}, Metric={N: 18788059,}},
+        {Heuristic={N: 1130.016805536025,}, Metric={N: 658129215,}},
+        {Heuristic={N: 513.8102496759067,}, Metric={N: 18788066,}}],Count: 5,ScannedCount: 6,}*/
+	private static Map<String, AttributeValue> getLower(List<Map<String, AttributeValue>> list) {
+		Map<String, AttributeValue> lower = null;
+		Iterator<Map<String, AttributeValue>> it = list.iterator();
+		while(it.hasNext()) {
+			Map<String, AttributeValue> current = it.next();
+			if(lower == null || Double.parseDouble(current.get("Heuristic").getN()) < Double.parseDouble(lower.get("Heuristic").getN())) {
+				lower = current;
+			}
+		}
+		return lower;
+	}
+
+	private static Map<String, AttributeValue> getHigher(List<Map<String, AttributeValue>> list) {
+		Map<String, AttributeValue> higher = null;
+		Iterator<Map<String, AttributeValue>> it = list.iterator();
+		while(it.hasNext()) {
+			Map<String, AttributeValue> current = it.next();
+			if(higher == null || Double.parseDouble(current.get("Heuristic").getN()) > Double.parseDouble(higher.get("Heuristic").getN())) {
+				higher = current;
+			}
+		}
+		return higher;
 	}
 
 	public static Thread autoscaler = new Thread(){
