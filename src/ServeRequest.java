@@ -1,5 +1,6 @@
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -11,9 +12,9 @@ import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.*;
 
 class ServeRequest implements Runnable {
 	private static final int CACHE_SIZE = 2;
+	private static final String OUTPUT_PATH = "outputs/A";
+	
 	private static ConcurrentLinkedQueue<Integer> requestsCache= new ConcurrentLinkedQueue<>();
-	private String outputPath = "outputs/A";
-	private Thread t;
 	private int hash;
 	private HttpExchange request;
 	
@@ -29,8 +30,8 @@ class ServeRequest implements Runnable {
 			// if the hash is in cache send response immediately
 			if(requestsCache.contains(hash)) {
 				System.out.println("Thread " + hash + " is going to use the cache.");
-				Path path = Paths.get(outputPath + hash);
-				request.sendResponseHeaders(200, Files.size(path));
+				Path path = Paths.get(OUTPUT_PATH + hash);
+				request.sendResponseHeaders(HttpURLConnection.HTTP_OK, Files.size(path));
 				OutputStream os = request.getResponseBody();
 				os.write(Files.readAllBytes(path));
 				os.close();
@@ -44,8 +45,7 @@ class ServeRequest implements Runnable {
 			// prepare the arguments for the maze runner
 			// receivedArgs = {m=Maze50.maze, x0=1, y0=1, x1=6, y1=6, v=75, s=bfs
 			// args = {1, 1, 6, 6, 75, bfs, MazeRunner/Maze50.maze, hash };
-			String[] receivedArgs = request.getRequestURI().getQuery().split("&");
-			String[] args = new String[8];
+			String[] receivedArgs = request.getRequestURI().getQuery().split("&"), args = new String[8];
 			for (String arg : receivedArgs){
 				String[] attributes = arg.split("=");
 				if (attributes[0].equals("x0")){
@@ -64,7 +64,7 @@ class ServeRequest implements Runnable {
 					args[6] = "MazeRunner/" + attributes[1];
 				}
 			}
-			args[7] = outputPath + hash;
+			args[7] = OUTPUT_PATH + hash;
 			
 			// execute maze runner
 			System.out.println("Thread " + hash + " going to calculate.");
@@ -72,7 +72,7 @@ class ServeRequest implements Runnable {
 				Main.main(args);
 			} catch (InvalidMazeRunningStrategyException | InvalidCoordinatesException | CantGenerateOutputFileException | CantReadMazeInputFileException e) {
 				String response = "Invalid query: " + e.getMessage();
-				request.sendResponseHeaders(200, response.length());
+				request.sendResponseHeaders(HttpURLConnection.HTTP_OK, response.length());
 				OutputStream os = request.getResponseBody();
 				os.write(response.getBytes());
 				os.close();
@@ -83,7 +83,7 @@ class ServeRequest implements Runnable {
 
 			// send html response to the client
 			Path path = Paths.get(args[7]);
-			request.sendResponseHeaders(200, Files.size(path));
+			request.sendResponseHeaders(HttpURLConnection.HTTP_OK, Files.size(path));
 			OutputStream os = request.getResponseBody();
 			os.write(Files.readAllBytes(path));
 			os.close();
@@ -93,9 +93,10 @@ class ServeRequest implements Runnable {
 			if(requestsCache.size() > CACHE_SIZE) {
 				int lastUsed = requestsCache.peek();
 				requestsCache.remove(lastUsed);
-				Files.delete(Paths.get(outputPath + lastUsed));
+				Files.delete(Paths.get(OUTPUT_PATH + lastUsed));
 			}
 			
+			System.out.println("Cache contents:");
 			for(Integer i : requestsCache) System.out.println(i);
 			
 			// adds the arguments to dynamo
@@ -109,10 +110,7 @@ class ServeRequest implements Runnable {
 
 	public void start() {
 		System.out.println("Thread " + hash + " starting.");
-		if (t == null) {
-			t = new Thread(this);
-			t.start();
-		}
+		new Thread(this).start();
 	}
 }
 

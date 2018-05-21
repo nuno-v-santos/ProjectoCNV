@@ -17,12 +17,13 @@ import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.Reservation;
 
 class HandleServer implements Runnable {
-	private static final int MAX_RETRIES = 3;
-	private static final int TIME_BETWEEN_PINGS = 10000;
+	private static final double THRESHOLD_VALUE = 18788059;
 	private static final int TIME_BETWEEN_RETRIES = 3333;
-	private static final int CACHE_SIZE = 2;
-	//private static final double THRESHOLD_VALUE = 18788059;  //TODO: choose value here
-	private static final double THRESHOLD_VALUE = 2;
+	private static final int TIME_BETWEEN_PINGS = 10000;
+	private static final int INSTANCE_CACHE_SIZE = 2;
+	private static final int RETRY_INTERVAL = 10000; // interval to retry sending request
+	private static final int MAX_RETRIES = 3;
+	
 	private String instanceIp = "";
 	private String instanceId = "";
 	private AmazonEC2 ec2;
@@ -60,7 +61,6 @@ class HandleServer implements Runnable {
 						HttpURLConnection con = (HttpURLConnection) url.openConnection();
 						con.setConnectTimeout(TIME_BETWEEN_RETRIES);
 						con.setRequestMethod("GET");
-						System.out.println(con.getResponseCode());
 						if (con.getResponseCode() == HttpURLConnection.HTTP_OK){
 							status = 2;
 							retries = 0;
@@ -70,34 +70,21 @@ class HandleServer implements Runnable {
 								e.printStackTrace();
 							}
 						} else if (status == 2){
-							System.out.println("New s");
-							if(retries++ > MAX_RETRIES && status == 2) {
-							status = 3;
-							}
-							try {
-								Thread.sleep(TIME_BETWEEN_RETRIES);
-							} catch (InterruptedException e) {
-								e.printStackTrace();
-							}
+							throw new IOException();
 						}
 					} catch (IOException e) {
-						System.out.println("Except");
 						if(++retries > MAX_RETRIES && status == 2) {
 							status = 3;
 						}
 						try {
-								Thread.sleep(TIME_BETWEEN_RETRIES);
-							} catch (InterruptedException ie) {
-								ie.printStackTrace();
-							}
+							Thread.sleep(TIME_BETWEEN_RETRIES);
+						} catch (InterruptedException ie) {
+							ie.printStackTrace();
+						}
 					}
 				}
-
-
 			}
 
-			// Instance died
-			System.out.println("Ping kill" + instanceId);
 			kill();
 			this.interrupt();
 		}
@@ -107,12 +94,13 @@ class HandleServer implements Runnable {
 		this.instanceId = id;
 		this.ec2 = ec2;
 		this.handling = new ArrayList<HttpExchange>();
-		this.handled = new ArrayList<HttpExchange>(CACHE_SIZE); ;
+		this.handled = new ArrayList<HttpExchange>(INSTANCE_CACHE_SIZE); ;
 		System.out.println("HandleServer for " + id + " created.");
 
 	}
 	
 	public void kill() {
+		System.out.println("Instance " + instanceId + " terminated");
 		status = 3;
 		LoadBalancer.instanceList.remove(instanceId);
 		LoadBalancer.serverLoad.remove((HandleServer)this);
@@ -137,19 +125,7 @@ class HandleServer implements Runnable {
 			handling.add(request);
 			
 			load += metric;
-			LoadBalancer.serverLoad.put((HandleServer)this, load);
-
-			System.out.println("Received request");
-			/*
-			// waits for instance to be ready
-			while (instanceIp == null || instanceIp.equals("")) {
-				try {
-					System.out.println("Instance not ready. Retrying to send request..");
-					Thread.sleep(5000);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-			}*/
+			LoadBalancer.serverLoad.put(this, load);
 
 			// send request to the instance
 			URL url = new URL("http://" + this.instanceIp + ":8000/mzrun.html?" + request.getRequestURI().getQuery());
@@ -174,16 +150,15 @@ class HandleServer implements Runnable {
 			os.close();
 
 			handling.remove(request);
-			if(handled.size() < CACHE_SIZE){
+			if(handled.size() < INSTANCE_CACHE_SIZE){
 				handled.add(request);
-			}
-			else{
+			} else{
 				LoadBalancer.requestsCache.remove(handled.get(0).getRequestURI().getQuery().hashCode());
 				handled.remove(0);
 				handled.add(request);
 			}
 			load -= metric;
-			LoadBalancer.serverLoad.put((HandleServer)this, load);
+			LoadBalancer.serverLoad.put(this, load);
 
 		} catch (IOException e) {
 			System.out.println("Retrying to send request");
@@ -191,7 +166,7 @@ class HandleServer implements Runnable {
 			load -= metric;
 			LoadBalancer.serverLoad.put((HandleServer)this, load);
 			try {
-				Thread.sleep(5000);
+				Thread.sleep(RETRY_INTERVAL);
 			} catch (InterruptedException ie) {
 				ie.printStackTrace();
 			}
