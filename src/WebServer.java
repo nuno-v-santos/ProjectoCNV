@@ -57,13 +57,13 @@ public class WebServer {
 	public static void writeToDynamo(Long threadId, String[] args) {
 		String metric = threadMetrics.get(threadId).toString();
 		String heuristic = Double.toString(calculateHeuristic(args));
-		
+
 		Map<String, AttributeValue> item = new HashMap<String, AttributeValue>();
 		item.put("Heuristic", new AttributeValue().withN(heuristic));
 		item.put("Metric", new AttributeValue().withN(metric));
 
 		dynamoDB.putItem(new PutItemRequest(tableName, item));
-		
+
 		System.out.println("Thread writing metrics: " + Arrays.toString(args) + ":" + metric);
 	}
 
@@ -72,7 +72,7 @@ public class WebServer {
 		int x1 = Integer.parseInt(args[2]), y1 = Integer.parseInt(args[3]);
 		int v = Integer.parseInt(args[4]);
 		int m = Integer.parseInt(args[6].substring(15, args[6].length()-5));
-		
+
 		double heuristic = Math.sqrt(Math.pow((x1-x0),2) + Math.pow((y1-y0),2) + 500/v + 10*m);
 		System.out.println("Heuristic of query " + Arrays.toString(args) + " is " + heuristic);
 		return heuristic;

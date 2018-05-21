@@ -13,11 +13,11 @@ import pt.ulisboa.tecnico.meic.cnv.mazerunner.maze.exceptions.*;
 class ServeRequest implements Runnable {
 	private static final int CACHE_SIZE = 2;
 	private static final String OUTPUT_PATH = "outputs/A";
-	
+
 	private static ConcurrentLinkedQueue<Integer> requestsCache= new ConcurrentLinkedQueue<>();
 	private int hash;
 	private HttpExchange request;
-	
+
 
 	public ServeRequest(int hash, HttpExchange request) {
 		this.hash = hash;
@@ -35,13 +35,13 @@ class ServeRequest implements Runnable {
 				OutputStream os = request.getResponseBody();
 				os.write(Files.readAllBytes(path));
 				os.close();
-				
+
 				//this will place the hash as the most recently used
 				requestsCache.remove(hash);
 				requestsCache.add(hash);
 				return;
 			}
-			
+
 			// prepare the arguments for the maze runner
 			// receivedArgs = {m=Maze50.maze, x0=1, y0=1, x1=6, y1=6, v=75, s=bfs
 			// args = {1, 1, 6, 6, 75, bfs, MazeRunner/Maze50.maze, hash };
@@ -65,7 +65,7 @@ class ServeRequest implements Runnable {
 				}
 			}
 			args[7] = OUTPUT_PATH + hash;
-			
+
 			// execute maze runner
 			System.out.println("Thread " + hash + " going to calculate.");
 			try {
@@ -95,10 +95,10 @@ class ServeRequest implements Runnable {
 				requestsCache.remove(lastUsed);
 				Files.delete(Paths.get(OUTPUT_PATH + lastUsed));
 			}
-			
+
 			System.out.println("Cache contents:");
-			for(Integer i : requestsCache) System.out.println(i);
-			
+			for(Integer i : requestsCache) System.out.println("\t" + i);
+
 			// adds the arguments to dynamo
 			WebServer.writeToDynamo(Thread.currentThread().getId(), args);
 
@@ -109,7 +109,6 @@ class ServeRequest implements Runnable {
 	}
 
 	public void start() {
-		System.out.println("Thread " + hash + " starting.");
 		new Thread(this).start();
 	}
 }
