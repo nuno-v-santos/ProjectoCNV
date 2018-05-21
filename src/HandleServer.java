@@ -20,7 +20,8 @@ class HandleServer implements Runnable {
 	private static final int MAX_RETRIES = 3;
 	private static final int TIME_BETWEEN_PINGS = 10000;
 	private static final int CACHE_SIZE = 2;
-	private static final double THRESHOLD_VALUE = 18788059;  //TODO: choose value here
+	//private static final double THRESHOLD_VALUE = 18788059;  //TODO: choose value here
+	private static final double THRESHOLD_VALUE = 2;
 	private String instanceIp = "";
 	private String instanceId = "";
 	private AmazonEC2 ec2;
@@ -107,8 +108,9 @@ class HandleServer implements Runnable {
 	public void sendRequest(HttpExchange request, Double metric) {
 		try {
 			handling.add(request);
-
-			LoadBalancer.serverLoad.put((HandleServer)this, LoadBalancer.serverLoad.get((HandleServer)this) + metric);
+			
+			load += metric;
+			LoadBalancer.serverLoad.put((HandleServer)this, load);
 
 			System.out.println("Received request");
 			/*
@@ -153,8 +155,8 @@ class HandleServer implements Runnable {
 				handled.remove(0);
 				handled.add(request);
 			}
-
-			LoadBalancer.serverLoad.put((HandleServer)this, LoadBalancer.serverLoad.get((HandleServer)this) - metric);
+			load -= metric;
+			LoadBalancer.serverLoad.put((HandleServer)this, load);
 
 		} catch (IOException e) {
 			System.out.println("Retrying to send request");
@@ -170,10 +172,6 @@ class HandleServer implements Runnable {
 		}
 	}
 
-	public void updateLoad() {
-
-	}
-
 	public boolean isAlive() {
 		return status != 3;
 	}
@@ -183,6 +181,7 @@ class HandleServer implements Runnable {
 	}
 
 	public boolean readyForRequest(){
+		System.out.println("Instance " + instanceId + " has load " + load);
 		return load <= THRESHOLD_VALUE;
 	}
 }

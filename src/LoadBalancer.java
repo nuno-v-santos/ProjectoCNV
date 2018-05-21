@@ -172,7 +172,6 @@ public class LoadBalancer {
         server.setExecutor(Executors.newFixedThreadPool(poolSize));
 		server.start();
 
-		newInstance();
         autoscaler.start();
 
 		System.out.println("Receiving Requests...");
@@ -330,7 +329,7 @@ public class LoadBalancer {
             while(true){
 
                 //auto-scaler decrease rules
-                int toleratedFreeInstances = 1;         //number of free instances possible
+                int toleratedFreeInstances = 1;
                 for(String i : instanceList.keySet()) {
                     HandleServer hs = instanceList.get(i);
                     if (hs.isFree()){ //if instance is not busy
@@ -343,18 +342,18 @@ public class LoadBalancer {
                 }
 
                 //auto-scaler increase rules
-                int freeToReceive = 0;         //number of instances that have no requests or have only a small one
+                int lowLoadInstances = 0;
                 for(String i : instanceList.keySet()) {
                     HandleServer hs = instanceList.get(i);
                     if (hs.readyForRequest())
-                        freeToReceive++;
+                    	lowLoadInstances++;
                 }
-                if (freeToReceive == 0){
+                if (lowLoadInstances == 0){
                     newInstance();
                 }
 
                 try{
-                    Thread.sleep(30000);
+                    Thread.sleep(3000);
                 } catch (InterruptedException e){
                     e.printStackTrace();
                 }
