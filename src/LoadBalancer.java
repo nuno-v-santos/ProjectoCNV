@@ -1,15 +1,12 @@
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -199,12 +196,13 @@ public class LoadBalancer {
 			// verify if it is in local cache
 			int requestHash = request.getRequestURI().getQuery().hashCode();
 			HandleServer hs = requestsCache.get(requestHash);
-			if(hs != null) {
-				if(hs.isAlive() && hs.handling.size() < MAX_EQUAL_REQUESTS_PER_SERVER) {
+			if(hs != null && hs.handling.size() < MAX_EQUAL_REQUESTS_PER_SERVER) {
+				if(hs.isAlive()) {
 					System.out.println("Sending request to cache");
 					hs.sendRequest(request,getMetric(request.getRequestURI().getQuery()));
 					return;
 				} else {
+					System.out.println("The instance died - removing from cache: " + requestHash);
 					requestsCache.remove(requestHash);
 				}
 			}
