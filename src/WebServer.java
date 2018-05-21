@@ -18,18 +18,17 @@ import com.amazonaws.services.dynamodbv2.model.PutItemRequest;
 import com.amazonaws.services.dynamodbv2.model.PutItemResult;
 
 public class WebServer {
-
-    static ConcurrentHashMap<Long, Double> threadMetrics = new ConcurrentHashMap<>();
-    private static AmazonDynamoDB dynamoDB;
-    private static String tableName = "Metrics";
-
-    public static void main(String[] args) throws Exception {
+	public static ConcurrentHashMap<Long, Double> threadMetrics = new ConcurrentHashMap<>();
+	private static AmazonDynamoDB dynamoDB;
+	private static String tableName = "Metrics";
+	private static final int POOL_SIZE = 30;
+	
+	public static void main(String[] args) throws Exception {
         initializeDataBase();
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
         server.createContext("/mzrun.html", new MazeRunnerHandler());
         server.createContext("/ping", new PingHandler());
-        int poolSize = Runtime.getRuntime().availableProcessors() + 1;
-        server.setExecutor(Executors.newFixedThreadPool(poolSize));
+        server.setExecutor(Executors.newFixedThreadPool(POOL_SIZE));
         System.out.println("Running");
         server.start();
     }

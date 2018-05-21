@@ -44,22 +44,22 @@ import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 
 public class LoadBalancer {
-    private static final String IMAGE_ID = "ami-b7039dc8";
-    private static final String AWS_KEY = "CNV";
-    private static final String AWS_SECURITY_GROUP = "CNV-ssh-http";
-    private static final int MAX_EQUAL_REQUESTS_PER_SERVER = 10;
-    private static final int CACHE_SIZE = 1024;
+	private static final String IMAGE_ID = "ami-5230a92d";
+	private static final String AWS_KEY = "CNV-lab-AWS";
+	private static final String AWS_SECURITY_GROUP = "CNV-ssh+http";
 	private static final String TABLE_NAME = "Metrics";
+	private static final int MAX_EQUAL_REQUESTS_PER_SERVER = 10;
+	private static final int CACHE_SIZE = 1024;
+	private static final int POOL_SIZE = 30;
 
 	public static ConcurrentHashMap<String, HandleServer> instanceList = new ConcurrentHashMap<>();
 	public static ConcurrentHashMap<Integer, HandleServer> requestsCache = new  ConcurrentHashMap<>();
-    public static ConcurrentHashMap<HandleServer, Double> serverLoad = new  ConcurrentHashMap<>();
+	public static ConcurrentHashMap<HandleServer, Double> serverLoad = new  ConcurrentHashMap<>();
 
 	private static AmazonEC2 ec2;
 	private static AmazonDynamoDB dynamoDB;
-	
-	private static void init() throws Exception {
 
+	private static void init() throws Exception {
 		AWSCredentials credentials = null;
 		try {
 			credentials = new ProfileCredentialsProvider().getCredentials();
@@ -92,9 +92,9 @@ public class LoadBalancer {
 			System.out.println("Error Code: " + ase.getErrorCode());
 			System.out.println("Request ID: " + ase.getRequestId());
 		}
-		
+
 		// init database
-		
+
 		dynamoDB = AmazonDynamoDBClientBuilder
 				.standard()
 				.withCredentials(new AWSStaticCredentialsProvider(credentials))
@@ -168,8 +168,7 @@ public class LoadBalancer {
 		HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
 		server.createContext("/mzrun.html", new RedirectHandler());
 		server.createContext("/ping", new PingHandler());
-		int poolSize = Runtime.getRuntime().availableProcessors() + 1;
-        server.setExecutor(Executors.newFixedThreadPool(poolSize));
+	        server.setExecutor(Executors.newFixedThreadPool(POOL_SIZE));
 		server.start();
 
         autoscaler.start();
