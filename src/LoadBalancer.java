@@ -221,6 +221,9 @@ public class LoadBalancer {
 
             System.out.println("Adding to cache. Cache size = " + requestsCache.size());
             requestsCache.put(requestHash, hs);
+            for(int hash : requestsCache.keySet()) {
+            	System.out.println("\t" + hash);
+            }
             System.out.println("Added to cache. Cache size = " + requestsCache.size());
             if(requestsCache.size() > CACHE_SIZE) {
 				requestsCache.remove(requestsCache.keys().nextElement());
@@ -228,11 +231,10 @@ public class LoadBalancer {
 		}
 	}
 
-
     private static double calculateHeuristic(String query) {
-    	System.out.println("Calculating heuristic of query -> " + query);
     	String[] args = query.split("&");
-    	int x0=0,y0=0,x1=0,y1=0,v=0,m=0;
+    	int x0=0, y0=0, x1=0, y1=0, v=0, m=0;
+    	double heuristic;
     	for (String arg : args){
 			String[] attributes = arg.split("=");
 			if (attributes[0].equals("x0")){
@@ -249,10 +251,9 @@ public class LoadBalancer {
 				m = Integer.parseInt(attributes[1].substring(4, attributes[1].length()-5));
 			}
 		}
-
-		System.out.println(m);
-        System.out.println("Heuristic is -> " + Math.sqrt(Math.pow((x1-x0),2) + Math.pow((y1-y0),2) * 1/v * m));
-		return Math.sqrt(Math.pow((x1-x0),2) + Math.pow((y1-y0),2) * 1/v * m);
+    	heuristic = Math.sqrt(Math.pow((x1-x0),2) + Math.pow((y1-y0),2) + 500/v + 10*m);
+    	System.out.println("Heuristic of query " + query + " is " + heuristic);
+		return heuristic;
 	}
 
     public static Double getMetric(String query) {

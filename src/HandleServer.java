@@ -2,7 +2,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
@@ -22,14 +21,14 @@ class HandleServer implements Runnable {
 	private static final int TIME_BETWEEN_PINGS = 10000;
 	private static final int CACHE_SIZE = 2;
 	private static final double THRESHOLD_VALUE = 18788059;  //TODO: choose value here
-	private String instanceIp;
-	private String instanceId;
+	private String instanceIp = "";
+	private String instanceId = "";
 	private AmazonEC2 ec2;
 	public ArrayList<HttpExchange> handling;
 	private ArrayList<HttpExchange> handled;
 	private int retries = 0;
 	private int status = 0;  //0:no ip  1:ip but not ready  2:running   3:dead
-	private String load;
+	private double load = 0;
 	
 	public Thread ping = new Thread() {
 		public void run() {
@@ -53,17 +52,13 @@ class HandleServer implements Runnable {
 							break;
 						}
 					}
-					System.out.println("Failed ping. IP not defined yet.");
 				} else {
 					try {
 						URL url = new URL("http://" + instanceIp + ":8000/ping");
 						HttpURLConnection con = (HttpURLConnection) url.openConnection();
 						con.setRequestMethod("GET");
 						if (con.getResponseCode() == 200){
-							System.out.println("Sucessfull ping for " + instanceIp);
 							status = 2;
-						} else {
-							System.out.println("Failed ping " + instanceIp);
 						}
 					} catch (IOException e) {
 						if(retries++ > MAX_RETRIES && status == 2) {
@@ -86,11 +81,9 @@ class HandleServer implements Runnable {
 
 	public HandleServer(AmazonEC2 ec2, String id) {
 		this.instanceId = id;
-		this.instanceIp = "";
 		this.ec2 = ec2;
 		this.handling = new ArrayList<HttpExchange>();
-		this.handled = new ArrayList<HttpExchange>(CACHE_SIZE); 
-		this.load = "0;"+id;
+		this.handled = new ArrayList<HttpExchange>(CACHE_SIZE); ;
 		System.out.println("HandleServer for " + id + " created.");
 
 	}
@@ -190,11 +183,6 @@ class HandleServer implements Runnable {
 	}
 
 	public boolean readyForRequest(){
-		System.out.println("Calculating ready for request");
-		if (handling.size() == 0)   //if it doesnt have requests
-			return true;
-		if (Integer.parseInt(load.split(";")[0]) <= THRESHOLD_VALUE)  //if it has one request but is a small one
-			return true;
-		return false;
+		return load <= THRESHOLD_VALUE;
 	}
 }
