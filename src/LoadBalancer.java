@@ -146,7 +146,7 @@ public class LoadBalancer {
 		HandleServer hs = new HandleServer(ec2, newInstanceId);
 		hs.start();
 		instanceList.put(newInstanceId, hs);
-        serverLoad.put(hs,0.0);
+		serverLoad.put(hs,0.0);
 	}
 
 	public static void closeInstance(String id) {
@@ -168,24 +168,24 @@ public class LoadBalancer {
 		HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
 		server.createContext("/mzrun.html", new RedirectHandler());
 		server.createContext("/ping", new PingHandler());
-	        server.setExecutor(Executors.newFixedThreadPool(POOL_SIZE));
+			server.setExecutor(Executors.newFixedThreadPool(POOL_SIZE));
 		server.start();
 
-        autoscaler.start();
+		autoscaler.start();
 
 		System.out.println("Receiving Requests...");
 	}
 
 	static class PingHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange t) throws IOException {
-            String response = "This was the query:" + t.getRequestURI().getQuery()   + "##";
-            t.sendResponseHeaders(200, response.length());
-            OutputStream os = t.getResponseBody();
-            os.write(response.getBytes());
-            os.close();
-        }
-    }
+		@Override
+		public void handle(HttpExchange t) throws IOException {
+			String response = "This was the query:" + t.getRequestURI().getQuery()   + "##";
+			t.sendResponseHeaders(200, response.length());
+			OutputStream os = t.getResponseBody();
+			os.write(response.getBytes());
+			os.close();
+		}
+	}
 
 	public static class RedirectHandler implements HttpHandler {
 
@@ -207,33 +207,33 @@ public class LoadBalancer {
 
 			// choose instance
 			Double metric = getMetric(request.getRequestURI().getQuery());
-            Double min = Double.MAX_VALUE;
-            for (Map.Entry<HandleServer, Double> entry: serverLoad.entrySet()) {
-            	if(entry.getValue() < min) {
-            		min = entry.getValue();
-            	    hs = entry.getKey();
-            	}            	
-            }
-            System.out.println("Sending request");
-            hs.sendRequest(request, metric);
+			Double min = Double.MAX_VALUE;
+			for (Map.Entry<HandleServer, Double> entry: serverLoad.entrySet()) {
+				if(entry.getValue() < min) {
+					min = entry.getValue();
+					hs = entry.getKey();
+				}            	
+			}
+			System.out.println("Sending request");
+			hs.sendRequest(request, metric);
 
-            System.out.println("Adding to cache. Cache size = " + requestsCache.size());
-            requestsCache.put(requestHash, hs);
-            for(int hash : requestsCache.keySet()) {
-            	System.out.println("\t" + hash);
-            }
-            System.out.println("Added to cache. Cache size = " + requestsCache.size());
-            if(requestsCache.size() > CACHE_SIZE) {
+			System.out.println("Adding to cache. Cache size = " + requestsCache.size());
+			requestsCache.put(requestHash, hs);
+			for(int hash : requestsCache.keySet()) {
+				System.out.println("\t" + hash);
+			}
+			System.out.println("Added to cache. Cache size = " + requestsCache.size());
+			if(requestsCache.size() > CACHE_SIZE) {
 				requestsCache.remove(requestsCache.keys().nextElement());
 			}
 		}
 	}
 
-    private static double calculateHeuristic(String query) {
-    	String[] args = query.split("&");
-    	int x0=0, y0=0, x1=0, y1=0, v=0, m=0;
-    	double heuristic;
-    	for (String arg : args){
+	private static double calculateHeuristic(String query) {
+		String[] args = query.split("&");
+		int x0=0, y0=0, x1=0, y1=0, v=0, m=0;
+		double heuristic;
+		for (String arg : args){
 			String[] attributes = arg.split("=");
 			if (attributes[0].equals("x0")){
 				x0 = Integer.parseInt(attributes[1]);
@@ -249,114 +249,114 @@ public class LoadBalancer {
 				m = Integer.parseInt(attributes[1].substring(4, attributes[1].length()-5));
 			}
 		}
-    	heuristic = Math.sqrt(Math.pow((x1-x0),2) + Math.pow((y1-y0),2) + 500/v + 10*m);
-    	System.out.println("Heuristic of query " + query + " is " + heuristic);
+		heuristic = Math.sqrt(Math.pow((x1-x0),2) + Math.pow((y1-y0),2) + 500/v + 10*m);
+		System.out.println("Heuristic of query " + query + " is " + heuristic);
 		return heuristic;
 	}
 
-    public static Double getMetric(String query) {
-        //Check if table empty
-        ScanRequest scanRequest = new ScanRequest(TABLE_NAME);
-        if (dynamoDB.scan(scanRequest).getCount() == 0) {
-        	System.out.println("Dynamo is empty");
-        	return .0;
-        }
-        double heuristic = calculateHeuristic(query);
-        
-        // Check if its there
-        HashMap<String,AttributeValue> key_to_get = new HashMap<String,AttributeValue>();
-        key_to_get.put("Heuristic", new AttributeValue().withN(Double.toString(heuristic)));
-        GetItemRequest r = new GetItemRequest()
-                .withKey(key_to_get)
-                .withTableName(TABLE_NAME);
-        Map<String, AttributeValue> returned_item = dynamoDB.getItem(r).getItem();
-        if (returned_item != null) {
-        	for (String key : returned_item.keySet()) {
-                System.out.format("Dynamo found match %s: %s\n", key, returned_item.get(key).toString());
-                return Double.parseDouble(returned_item.get(key).getN());
-        	}
-        }
-        
-        // weighted average between lower and higher values of dynamo
-        // get higher
-        HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
-        Condition condition =  new Condition()
-                .withComparisonOperator(ComparisonOperator.GT.toString())
-                .withAttributeValueList(new AttributeValue().withN(Double.toString(heuristic)));
-        scanFilter.put("Heuristic", condition);
-        scanRequest = new ScanRequest(TABLE_NAME).withScanFilter(scanFilter);
-        ScanResult scanResultGT = dynamoDB.scan(scanRequest);
+	public static Double getMetric(String query) {
+		//Check if table empty
+		ScanRequest scanRequest = new ScanRequest(TABLE_NAME);
+		if (dynamoDB.scan(scanRequest).getCount() == 0) {
+			System.out.println("Dynamo is empty");
+			return .0;
+		}
+		double heuristic = calculateHeuristic(query);
+		
+		// Check if its there
+		HashMap<String,AttributeValue> key_to_get = new HashMap<String,AttributeValue>();
+		key_to_get.put("Heuristic", new AttributeValue().withN(Double.toString(heuristic)));
+		GetItemRequest r = new GetItemRequest()
+				.withKey(key_to_get)
+				.withTableName(TABLE_NAME);
+		Map<String, AttributeValue> returned_item = dynamoDB.getItem(r).getItem();
+		if (returned_item != null) {
+			for (String key : returned_item.keySet()) {
+				System.out.format("Dynamo found match %s: %s\n", key, returned_item.get(key).toString());
+				return Double.parseDouble(returned_item.get(key).getN());
+			}
+		}
+		
+		// weighted average between lower and higher values of dynamo
+		// get higher
+		HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
+		Condition condition =  new Condition()
+				.withComparisonOperator(ComparisonOperator.GT.toString())
+				.withAttributeValueList(new AttributeValue().withN(Double.toString(heuristic)));
+		scanFilter.put("Heuristic", condition);
+		scanRequest = new ScanRequest(TABLE_NAME).withScanFilter(scanFilter);
+		ScanResult scanResultGT = dynamoDB.scan(scanRequest);
 
-        //get smaller
-        scanFilter = new HashMap<String, Condition>();
-        condition =  new Condition()
-                .withComparisonOperator(ComparisonOperator.LT.toString())
-                .withAttributeValueList(new AttributeValue().withN(Double.toString(heuristic)));
-        scanFilter.put("Heuristic", condition);
-        scanRequest = new ScanRequest(TABLE_NAME).withScanFilter(scanFilter);
-        ScanResult scanResultLT = dynamoDB.scan(scanRequest);
+		//get smaller
+		scanFilter = new HashMap<String, Condition>();
+		condition =  new Condition()
+				.withComparisonOperator(ComparisonOperator.LT.toString())
+				.withAttributeValueList(new AttributeValue().withN(Double.toString(heuristic)));
+		scanFilter.put("Heuristic", condition);
+		scanRequest = new ScanRequest(TABLE_NAME).withScanFilter(scanFilter);
+		ScanResult scanResultLT = dynamoDB.scan(scanRequest);
 
-        System.out.println("Results LT -> " + scanResultLT);
-        System.out.println("Results GT -> " + scanResultGT);
+		System.out.println("Results LT -> " + scanResultLT);
+		System.out.println("Results GT -> " + scanResultGT);
 
-        double lowerHeuristic = .0, lowerMetric = .0, higherHeuristic = .0, higherMetric = .0;
-        if (scanResultGT.getCount() != 0 && scanResultLT.getCount() != 0) {
-            Map<String, AttributeValue> lower = scanResultLT.getItems().get(0);
-            for (Map.Entry<String, AttributeValue> pair : lower.entrySet()) {
-                lowerHeuristic = Double.parseDouble(pair.getKey());
-                lowerMetric = Double.parseDouble(pair.getValue().getN());
-            }
-            Map<String, AttributeValue> higher =  scanResultGT.getItems().get(0);
-            for (Map.Entry<String, AttributeValue> pair : higher.entrySet()) {
-            	higherHeuristic = Double.parseDouble(pair.getKey());
-                higherMetric = Double.parseDouble(pair.getValue().getN());
-            }
-            // weighted average formula
-            return lowerMetric + (higherMetric - lowerMetric) * ((heuristic - lowerHeuristic) / (higherHeuristic - lowerHeuristic));
-        } else if (scanResultLT.getCount() != 0) {
-            AttributeValue lower = (AttributeValue) scanResultLT.getItems().get(0).values().toArray()[0];
-            return Double.parseDouble(lower.getN());
-        } else if (scanResultGT.getCount() != 0){
-            AttributeValue higher = (AttributeValue) scanResultGT.getItems().get(0).values().toArray()[0];
-        	return Double.parseDouble(higher.getN());
-        }
-        return .0;
-    }
+		double lowerHeuristic = .0, lowerMetric = .0, higherHeuristic = .0, higherMetric = .0;
+		if (scanResultGT.getCount() != 0 && scanResultLT.getCount() != 0) {
+			Map<String, AttributeValue> lower = scanResultLT.getItems().get(0);
+			for (Map.Entry<String, AttributeValue> pair : lower.entrySet()) {
+				lowerHeuristic = Double.parseDouble(pair.getKey());
+				lowerMetric = Double.parseDouble(pair.getValue().getN());
+			}
+			Map<String, AttributeValue> higher =  scanResultGT.getItems().get(0);
+			for (Map.Entry<String, AttributeValue> pair : higher.entrySet()) {
+				higherHeuristic = Double.parseDouble(pair.getKey());
+				higherMetric = Double.parseDouble(pair.getValue().getN());
+			}
+			// weighted average formula
+			return lowerMetric + (higherMetric - lowerMetric) * ((heuristic - lowerHeuristic) / (higherHeuristic - lowerHeuristic));
+		} else if (scanResultLT.getCount() != 0) {
+			AttributeValue lower = (AttributeValue) scanResultLT.getItems().get(0).values().toArray()[0];
+			return Double.parseDouble(lower.getN());
+		} else if (scanResultGT.getCount() != 0){
+			AttributeValue higher = (AttributeValue) scanResultGT.getItems().get(0).values().toArray()[0];
+			return Double.parseDouble(higher.getN());
+		}
+		return .0;
+	}
 
-    public static Thread autoscaler = new Thread(){
-        public void run(){
-            while(true){
+	public static Thread autoscaler = new Thread(){
+		public void run(){
+			while(true){
 
-                //auto-scaler decrease rules
-                int toleratedFreeInstances = 1;
-                for(String i : instanceList.keySet()) {
-                    HandleServer hs = instanceList.get(i);
-                    if (hs.isFree()){ //if instance is not busy
-                        if (toleratedFreeInstances > 0){
-                            toleratedFreeInstances--;
-                        } else {
-                            hs.kill();
-                        }
-                    }
-                }
+				//auto-scaler decrease rules
+				int toleratedFreeInstances = 1;
+				for(String i : instanceList.keySet()) {
+					HandleServer hs = instanceList.get(i);
+					if (hs.isFree()){ //if instance is not busy
+						if (toleratedFreeInstances > 0){
+							toleratedFreeInstances--;
+						} else {
+							hs.kill();
+						}
+					}
+				}
 
-                //auto-scaler increase rules
-                int lowLoadInstances = 0;
-                for(String i : instanceList.keySet()) {
-                    HandleServer hs = instanceList.get(i);
-                    if (hs.readyForRequest())
-                    	lowLoadInstances++;
-                }
-                if (lowLoadInstances == 0){
-                    newInstance();
-                }
+				//auto-scaler increase rules
+				int lowLoadInstances = 0;
+				for(String i : instanceList.keySet()) {
+					HandleServer hs = instanceList.get(i);
+					if (hs.readyForRequest())
+						lowLoadInstances++;
+				}
+				if (lowLoadInstances == 0){
+					newInstance();
+				}
 
-                try{
-                    Thread.sleep(3000);
-                } catch (InterruptedException e){
-                    e.printStackTrace();
-                }
-            }
-        }
-    };
+				try{
+					Thread.sleep(3000);
+				} catch (InterruptedException e){
+					e.printStackTrace();
+				}
+			}
+		}
+	};
 }

@@ -71,12 +71,12 @@ class ServeRequest implements Runnable {
 			try {
 				Main.main(args);
 			} catch (InvalidMazeRunningStrategyException | InvalidCoordinatesException | CantGenerateOutputFileException | CantReadMazeInputFileException e) {
-	            String response = "Invalid query: " + e.getMessage();
-	            request.sendResponseHeaders(200, response.length());
-	            OutputStream os = request.getResponseBody();
-	            os.write(response.getBytes());
-	            os.close();
-	            return;
+				String response = "Invalid query: " + e.getMessage();
+				request.sendResponseHeaders(200, response.length());
+				OutputStream os = request.getResponseBody();
+				os.write(response.getBytes());
+				os.close();
+				return;
 			}
 
 			System.out.println("Thread " + hash + " sending response.");
